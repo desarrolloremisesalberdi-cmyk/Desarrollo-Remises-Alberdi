@@ -128,15 +128,53 @@ app.post('/api/viajes/accept', async (req, res) => {
   }
 });
 
+// Obtener choferes activos (libres u ocupados) con sus ubicaciones
+app.get('/api/choferes/activos', async (req, res) => {
+  try {
+    const result = await db.query(
+      "SELECT id, nombre, apellido, dni, numero_movil, estado, lat, lng, is_online FROM choferes WHERE is_online = true OR estado IN ('libre', 'ocupado')"
+    );
+    res.json({ success: true, choferes: result.rows });
+  } catch (error) {
+    console.error('Error al obtener choferes activos:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Obtener todos los choferes (para el panel de gestión)
+app.get('/api/choferes', async (req, res) => {
+  try {
+    const result = await db.query(
+      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, vehiculo_patente FROM choferes ORDER BY numero_movil ASC"
+    );
+    res.json({ success: true, choferes: result.rows });
+  } catch (error) {
+    console.error('Error al obtener todos los choferes:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
 // Configuración de WebSockets para tiempo real
 io.on('connection', (socket) => {
   console.log(`Nuevo usuario conectado: ${socket.id}`);
 
   // Cuando un chofer actualiza su ubicación
-  socket.on('update_location', (data) => {
+  socket.on('update_location', async (data) => {
+    // 1. Emitir a todos (Operador y otros) al instante
     socket.broadcast.emit('driver_location', data);
+    
+    // 2. Persistir en la base de datos
+    try {
+      const estado = data.isOnline ? 'libre' : 'inactivo';
+      await db.query(
+        "UPDATE choferes SET lat = $1, lng = $2, is_online = $3, estado = $4 WHERE id = $5 OR dni = $6",
+        [data.lat, data.lng, data.isOnline, estado, data.chofer_id, data.dni]
+      );
+    } catch (err) {
+      console.error('Error al persistir ubicación:', err);
+    }
   });
-  
+
   // Cuando un pasajero pide viaje directamente por socket (opcional)
   socket.on('request_ride_direct', (data) => {
     socket.broadcast.emit('new_ride_request', data);

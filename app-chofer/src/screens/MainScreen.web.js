@@ -15,16 +15,25 @@ export default function MainScreen({ route }) {
   useEffect(() => {
     // Escuchar solicitudes de viaje nuevas
     socket.on('new_ride_request', (viaje) => {
-      // Solo notificar si el chofer está online
       if (isOnline) {
         setIncomingRide(viaje);
       }
     });
 
+    // Reportar estado y ubicación (simulada) al operador cada vez que cambie isOnline
+    socket.emit('update_location', {
+      chofer_id: chofer.id || 'sim-1',
+      dni: chofer.dni || '31861718',
+      movil: chofer.numero_movil || '14',
+      lat: -33.045, // Ubicación simulada en Casilda
+      lng: -61.168,
+      isOnline: isOnline
+    });
+
     return () => {
       socket.off('new_ride_request');
     };
-  }, [isOnline]);
+  }, [isOnline, chofer]);
 
   const aceptarViaje = async () => {
     if (!chofer.id || !incomingRide) return;
@@ -58,7 +67,11 @@ export default function MainScreen({ route }) {
   return (
     <View style={styles.container}>
       <View style={styles.mapPlaceholder}>
-        <Text style={styles.placeholderText}>🗺️ El mapa del chofer está disponible en la app nativa (Celular).</Text>
+        <iframe 
+          title="Mapa de Casilda"
+          src="https://www.openstreetmap.org/export/embed.html?bbox=-61.19,-33.06,-61.14,-33.02&layer=mapnik"
+          style={{ width: '100%', height: '100%', border: 0 }}
+        />
       </View>
       
       {/* Notificación de Nuevo Viaje */}
@@ -84,14 +97,14 @@ export default function MainScreen({ route }) {
       )}
 
       <View style={styles.header}>
-        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#28a745' : '#dc3545' }]} />
+        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#39ff14' : '#dc3545' }]} />
         <Text style={styles.statusText}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
       </View>
 
       <View style={styles.bottomCard}>
         <Text style={styles.title}>Recaudación Hoy: $0</Text>
         <TouchableOpacity 
-          style={[styles.button, { backgroundColor: isOnline ? '#dc3545' : '#28a745' }]}
+          style={[styles.button, { backgroundColor: isOnline ? '#dc3545' : '#39ff14' }]}
           onPress={() => setIsOnline(!isOnline)}
         >
           <Text style={styles.buttonText}>{isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)'}</Text>
@@ -104,18 +117,17 @@ export default function MainScreen({ route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#050505',
   },
   mapPlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#e9ecef',
+    backgroundColor: '#111',
   },
   placeholderText: {
     fontSize: 16,
-    color: '#6c757d',
+    color: '#888',
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -123,19 +135,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(20, 20, 22, 0.95)',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#39ff14',
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 10,
     elevation: 5,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: 'rgba(57, 255, 20, 0.2)',
   },
   statusIndicator: {
     width: 12,
@@ -150,29 +162,31 @@ const styles = StyleSheet.create({
   statusText: {
     fontWeight: '700',
     fontSize: 15,
-    color: '#374151',
+    color: '#fff',
     letterSpacing: 0.3,
   },
   bottomCard: {
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(20, 20, 22, 0.95)',
     padding: 25,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    shadowColor: '#000',
+    shadowColor: '#39ff14',
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.1,
     shadowRadius: 15,
     elevation: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(57, 255, 20, 0.2)',
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 20,
     textAlign: 'center',
-    color: '#111827',
+    color: '#fff',
   },
   button: {
     padding: 18,
@@ -193,34 +207,36 @@ const styles = StyleSheet.create({
   /* Estilos para el Pop-up del Viaje */
   notificationOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17, 24, 39, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
-    backdropFilter: 'blur(4px)',
+    backdropFilter: 'blur(8px)',
   },
   notificationCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#111',
     padding: 35,
     borderRadius: 24,
     width: '85%',
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
+    shadowColor: '#39ff14',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(57, 255, 20, 0.3)',
   },
   notificationTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#111827',
+    color: '#39ff14',
     marginBottom: 15,
   },
   notificationText: {
     fontSize: 16,
-    color: '#4b5563',
+    color: '#ccc',
     textAlign: 'center',
     marginBottom: 10,
     lineHeight: 22,

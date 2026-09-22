@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.choferes (
     nombre VARCHAR(100) NOT NULL,
     apellido VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE,
+    clave VARCHAR(255),
     telefono VARCHAR(50),
     domicilio VARCHAR(255),
     dni VARCHAR(20),

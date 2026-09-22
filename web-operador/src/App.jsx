@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { io } from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
 import { UserPlus, Car, Map as MapIcon, DollarSign } from 'lucide-react';
@@ -8,7 +9,54 @@ import Drivers from './pages/Drivers';
 import NewUser from './pages/NewUser';
 import Finances from './pages/Finances';
 
+
+const socket = io('http://localhost:3000');
+
 function DashboardMap() {
+  const [activeDrivers, setActiveDrivers] = useState({});
+
+  useEffect(() => {
+    // 1. Cargar el historial o estado actual desde la base de datos (Backend local)
+    fetch('http://localhost:3000/api/choferes/activos')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          const dict = {};
+          data.choferes.forEach(ch => {
+            // Re-mapeamos para que coincida con el formato del socket
+            dict[ch.id || ch.dni] = {
+              chofer_id: ch.id || ch.dni,
+              dni: ch.dni,
+              movil: ch.numero_movil,
+              lat: ch.lat,
+              lng: ch.lng,
+              isOnline: ch.is_online
+            };
+          });
+          setActiveDrivers(dict);
+        }
+      })
+      .catch(err => console.error("Error cargando choferes:", err));
+
+    // 2. Escuchar pulsos en tiempo real
+    socket.on('driver_location', (data) => {
+      setActiveDrivers((prev) => ({
+        ...prev,
+        [data.chofer_id]: data
+      }));
+    });
+
+    return () => {
+      socket.off('driver_location');
+    };
+  }, []);
+
+  // Calcular totales
+  const driversList = Object.values(activeDrivers);
+  const autosLibres = driversList.filter(d => d.isOnline).length;
+  const autosOcupados = driversList.filter(d => !d.isOnline).length;
+  const autosDesconectados = 15 - (autosLibres + autosOcupados); // Asumiendo 15 flota total
+
   return (
     <main className="content">
       <header>
@@ -21,19 +69,22 @@ function DashboardMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; OpenStreetMap contributors'
           />
-          <Marker position={[-33.045, -61.168]}>
-            <Popup>Auto Libre (Verde) <br/> Móvil #14</Popup>
-          </Marker>
-          <Marker position={[-33.041, -61.170]}>
-            <Popup>Auto Ocupado (Rojo) <br/> Móvil #03</Popup>
-          </Marker>
+          {driversList.map(driver => (
+            <Marker key={driver.chofer_id} position={[driver.lat, driver.lng]}>
+              <Popup>
+                Móvil #{driver.movil} <br/> 
+                {driver.isOnline ? 'Auto Libre (Verde)' : 'Auto Ocupado (Rojo)'} <br/>
+                DNI: {driver.dni}
+              </Popup>
+            </Marker>
+          ))}
         </MapContainer>
       </div>
       
       <div className="stats">
-        <div className="card green">Autos Libres: 1</div>
-        <div className="card red">Autos Ocupados: 1</div>
-        <div className="card gray">Autos Desconectados: 15</div>
+        <div className="card green">Autos Libres: {autosLibres}</div>
+        <div className="card red">Autos Ocupados: {autosOcupados}</div>
+        <div className="card gray">Autos Desconectados: {autosDesconectados}</div>
       </div>
     </main>
   );
@@ -48,7 +99,6 @@ function Layout({ children }) {
         <ul>
           <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}><MapIcon /> Mapa en Vivo</Link></li>
           <li><Link to="/choferes" className={location.pathname === '/choferes' ? 'active' : ''}><Car /> Choferes</Link></li>
-          <li><Link to="/nuevo-usuario" className={location.pathname === '/nuevo-usuario' ? 'active' : ''}><UserPlus /> Nuevo Usuario</Link></li>
           <li><Link to="/finanzas" className={location.pathname === '/finanzas' ? 'active' : ''}><DollarSign /> Finanzas</Link></li>
         </ul>
       </nav>

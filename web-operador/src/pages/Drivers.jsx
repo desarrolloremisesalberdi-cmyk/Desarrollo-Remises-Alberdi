@@ -1,42 +1,36 @@
 import React, { useState } from 'react';
-import { Search, AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react';
-
-const mockDrivers = [
-  {
-    id: 1,
-    nombre: 'Juan Pérez',
-    dni: '25487123',
-    movil: '14',
-    licencia_vencimiento: '2027-10-15',
-    estado: 'Activo',
-    vehiculo: 'Fiat Cronos (AB123CD)'
-  },
-  {
-    id: 2,
-    nombre: 'Carlos Gómez',
-    dni: '30125489',
-    movil: '03',
-    licencia_vencimiento: '2026-10-01', // Próximo a vencer
-    estado: 'Inactivo',
-    vehiculo: 'Chevrolet Prisma (AD456EF)'
-  },
-  {
-    id: 3,
-    nombre: 'Miguel Rodríguez',
-    dni: '18754125',
-    movil: '08',
-    licencia_vencimiento: '2025-05-10', // Vencida
-    estado: 'Suspendido',
-    vehiculo: 'Renault Logan (AA789GH)'
-  }
-];
+import { Search, AlertTriangle, CheckCircle, ChevronRight, UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Drivers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDriver, setSelectedDriver] = useState(null);
+  const [driversList, setDriversList] = useState([]);
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    fetch('http://localhost:3000/api/choferes')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          // Normalizar datos para la vista
+          const list = data.choferes.map(ch => ({
+            id: ch.id,
+            nombre: `${ch.nombre} ${ch.apellido}`,
+            dni: ch.dni,
+            movil: ch.numero_movil ? ch.numero_movil.toString().padStart(2, '0') : 'N/A',
+            licencia_vencimiento: '2027-10-15', // Mock para la vista por ahora
+            estado: ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido',
+            vehiculo: ch.vehiculo_modelo || 'Vehículo Genérico'
+          }));
+          setDriversList(list);
+        }
+      })
+      .catch(err => console.error(err));
+  }, []);
 
   // Filtramos por DNI o Número de Móvil
-  const filteredDrivers = mockDrivers.filter(driver => 
+  const filteredDrivers = driversList.filter(driver => 
     driver.dni.includes(searchTerm) || driver.movil.includes(searchTerm)
   );
 
@@ -59,14 +53,20 @@ export default function Drivers() {
     <div className="page-container">
       <header className="page-header">
         <h1>Gestión de Choferes</h1>
-        <div className="search-box">
-          <Search size={20} color="#888" />
-          <input 
-            type="text" 
-            placeholder="Buscar por DNI o Nº Móvil..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <div className="search-box">
+            <Search size={20} color="#888" />
+            <input 
+              type="text" 
+              placeholder="Buscar por DNI o Nº Móvil..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-primary" onClick={() => navigate('/nuevo-usuario')}>
+            <UserPlus size={18} style={{marginRight: '8px'}} />
+            Nuevo Chofer
+          </button>
         </div>
       </header>
 

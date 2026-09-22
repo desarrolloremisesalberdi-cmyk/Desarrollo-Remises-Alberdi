@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 
-const API_URL = 'http://localhost:3000'; 
+const API_URL = 'https://taxis-alberdi-backend.onrender.com'; 
 
 export default function LoginScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
@@ -86,41 +86,39 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 30,
     justifyContent: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#050505',
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 50,
-    color: '#111827',
-    letterSpacing: -0.5,
+    color: '#39ff14',
+    textShadowColor: 'rgba(57, 255, 20, 0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10
   },
   input: {
-    backgroundColor: 'white',
+    height: 55,
+    backgroundColor: '#111',
+    borderColor: '#39ff14',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    padding: 18,
-    marginBottom: 20,
     borderRadius: 12,
+    paddingHorizontal: 20,
+    marginBottom: 20,
     fontSize: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    color: '#fff'
   },
   button: {
-    backgroundColor: '#3b82f6',
-    padding: 18,
+    backgroundColor: '#39ff14',
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowColor: '#39ff14',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10
   },
   buttonText: {
     color: '#fff',
