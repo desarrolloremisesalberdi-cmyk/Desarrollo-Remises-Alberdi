@@ -23,9 +23,10 @@ const io = new Server(server, {
   }
 });
 
-// Rutas básicas
+// Rutas básicas (Servir Dashboard Temporal)
+const path = require('path');
 app.get('/', (req, res) => {
-  res.json({ message: 'Bienvenido a la API de Radio Taxi Alberdi' });
+  res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 // Registrar o iniciar sesión de Pasajero
