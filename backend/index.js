@@ -264,6 +264,26 @@ app.get('/api/finanzas/admin', async (req, res) => {
   }
 });
 
+// Endpoint de Historial de Viajes para Chofer
+app.get('/api/finanzas/chofer/:id', async (req, res) => {
+  const choferId = req.params.id;
+  try {
+    const result = await db.query(`
+      SELECT v.id, v.estado, v.monto_calculado, v.comision_admin, v.distancia_km, 
+             v.metodo_pago, v.created_at as fecha,
+             u.nombre as pasajero_nombre, u.apellido as pasajero_apellido
+      FROM viajes v
+      LEFT JOIN usuarios u ON v.usuario_id = u.id
+      WHERE v.chofer_id = $1 AND v.estado = 'finalizado'
+      ORDER BY v.created_at DESC
+    `, [choferId]);
+    res.json({ success: true, viajes: result.rows });
+  } catch (error) {
+    console.error('Error al obtener viajes del chofer:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener viajes' });
+  }
+});
+
 // Configuración de WebSockets para tiempo real
 io.on('connection', (socket) => {
   console.log(`Nuevo usuario conectado: ${socket.id}`);

@@ -54,6 +54,10 @@ export default function MainScreen({ route, navigation }) {
         <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={[styles.resumenBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={() => navigation.navigate('Resumen', { chofer })}>
+        <Text style={{ color: theme.text, fontWeight: '700' }}>Resumen</Text>
+      </TouchableOpacity>
+
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
         <TouchableOpacity 
@@ -121,6 +125,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 110, // Debajo del header principal
     alignSelf: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  resumenBtn: {
+    position: 'absolute',
+    top: 50, // Arriba a la izquierda (el header está al medio)
+    left: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 12,
