@@ -9,7 +9,7 @@ export default function Drivers() {
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    fetch('http://localhost:3000/api/choferes')
+    fetch('https://taxis-alberdi-backend.onrender.com/api/choferes')
       .then(res => res.json())
       .then(data => {
         if (data.success) {

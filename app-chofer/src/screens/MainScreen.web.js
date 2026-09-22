@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Alert, useColorScheme } from 'react-native';
 import { io } from 'socket.io-client';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = 'https://taxis-alberdi-backend.onrender.com';
 const socket = io(API_URL);
 
 export default function MainScreen({ route }) {

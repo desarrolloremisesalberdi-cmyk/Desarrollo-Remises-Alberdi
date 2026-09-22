@@ -10,14 +10,14 @@ import NewUser from './pages/NewUser';
 import Finances from './pages/Finances';
 
 
-const socket = io('http://localhost:3000');
+const socket = io('https://taxis-alberdi-backend.onrender.com');
 
 function DashboardMap() {
   const [activeDrivers, setActiveDrivers] = useState({});
 
   useEffect(() => {
     // 1. Cargar el historial o estado actual desde la base de datos (Backend local)
-    fetch('http://localhost:3000/api/choferes/activos')
+    fetch('https://taxis-alberdi-backend.onrender.com/api/choferes/activos')
       .then(res => res.json())
       .then(data => {
         if (data.success) {
