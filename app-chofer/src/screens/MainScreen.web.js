@@ -8,6 +8,7 @@ const socket = io(API_URL);
 export default function MainScreen({ route }) {
   const [isOnline, setIsOnline] = useState(true); // Lo ponemos true por defecto para pruebas
   const [incomingRide, setIncomingRide] = useState(null);
+  const [activeTrip, setActiveTrip] = useState(null);
 
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
@@ -53,6 +54,7 @@ export default function MainScreen({ route }) {
       const data = await response.json();
       if (data.success) {
         alert('¡Viaje Aceptado! Dirígete al punto de partida.');
+        setActiveTrip(data.viaje);
         setIsOnline(false); // Automáticamente pasa a ocupado
       } else {
         alert('Error al aceptar el viaje: ' + data.error);
@@ -65,6 +67,32 @@ export default function MainScreen({ route }) {
 
   const rechazarViaje = () => {
     setIncomingRide(null);
+  };
+
+  const handleToggleStatus = async () => {
+    if (!isOnline && activeTrip) {
+      // El chofer estaba ocupado y pasa a libre -> Finaliza el viaje
+      try {
+        const response = await fetch(`${API_URL}/api/viajes/finish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            viaje_id: activeTrip.id,
+            chofer_id: chofer.id,
+            fin_lat: -33.046, // Ubicación simulada final
+            fin_lng: -61.169
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert(`Viaje Finalizado.\nDistancia: ${data.viaje.distancia_km.toFixed(2)} km\nMonto a Cobrar: $${data.viaje.monto_calculado}\nComisión Base: $${data.viaje.comision_admin}`);
+        }
+      } catch (err) {
+        console.error('Error al finalizar viaje:', err);
+      }
+      setActiveTrip(null);
+    }
+    setIsOnline(!isOnline);
   };
 
   return (
@@ -108,7 +136,7 @@ export default function MainScreen({ route }) {
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
         <TouchableOpacity 
           style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : '#10b981' }]}
-          onPress={() => setIsOnline(!isOnline)}
+          onPress={handleToggleStatus}
         >
           <Text style={styles.buttonText}>{isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)'}</Text>
         </TouchableOpacity>

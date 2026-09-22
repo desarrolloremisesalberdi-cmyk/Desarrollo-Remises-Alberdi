@@ -1,22 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Calendar, CreditCard, Banknote } from 'lucide-react';
 
-const mockTrips = [
-  { id: 101, fecha: '18/09/2026 14:30', chofer: 'Móvil #14 - Juan Pérez', pasajero: 'María López', monto: 3500, pago: 'MercadoPago', estado: 'Finalizado' },
-  { id: 102, fecha: '18/09/2026 15:15', chofer: 'Móvil #03 - Carlos Gómez', pasajero: 'Roberto Sánchez', monto: 2200, pago: 'Efectivo', estado: 'Finalizado' },
-  { id: 103, fecha: '18/09/2026 16:00', chofer: 'Móvil #14 - Juan Pérez', pasajero: 'Lucía Fernández', monto: 4100, pago: 'Efectivo', estado: 'Finalizado' },
-  { id: 104, fecha: '18/09/2026 16:45', chofer: 'Móvil #08 - Miguel Rodríguez', pasajero: 'Diego Torres', monto: 1800, pago: 'MercadoPago', estado: 'Cancelado' },
-  { id: 105, fecha: '18/09/2026 17:20', chofer: 'Móvil #03 - Carlos Gómez', pasajero: 'Ana Martínez', monto: 5500, pago: 'Efectivo', estado: 'Finalizado' }
-];
+const API_URL = 'https://taxis-alberdi-backend.onrender.com';
 
 export default function Finances() {
   const [filter, setFilter] = useState('hoy');
+  const [trips, setTrips] = useState([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/finanzas/admin`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setTrips(data.viajes);
+        }
+      })
+      .catch(err => console.error("Error fetching finances:", err));
+  }, []);
 
   // Filtrar los cancelados para la suma total
-  const completedTrips = mockTrips.filter(t => t.estado === 'Finalizado');
-  const totalRevenue = completedTrips.reduce((acc, trip) => acc + trip.monto, 0);
-  const totalCash = completedTrips.filter(t => t.pago === 'Efectivo').reduce((acc, trip) => acc + trip.monto, 0);
-  const totalMP = completedTrips.filter(t => t.pago === 'MercadoPago').reduce((acc, trip) => acc + trip.monto, 0);
+  const completedTrips = trips.filter(t => t.estado === 'finalizado');
+  const totalRevenue = completedTrips.reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
+  const totalCommission = completedTrips.reduce((acc, trip) => acc + Number(trip.comision_admin || 0), 0);
+  
+  // Asumimos efectivo por defecto si no hay método
+  const totalCash = completedTrips.filter(t => t.metodo_pago !== 'mercadopago').reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
+  const totalMP = completedTrips.filter(t => t.metodo_pago === 'mercadopago').reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
 
   return (
     <div className="page-container">
@@ -44,8 +53,8 @@ export default function Finances() {
         <div className="kpi-card cash">
           <div className="kpi-icon"><Banknote size={24} /></div>
           <div className="kpi-data">
-            <h3>En Efectivo</h3>
-            <h2>${totalCash.toLocaleString()}</h2>
+            <h3>Comisión Agencia (15%)</h3>
+            <h2>${totalCommission.toLocaleString('es-AR', {minimumFractionDigits: 2})}</h2>
             <p>A rendir por choferes</p>
           </div>
         </div>
@@ -77,24 +86,24 @@ export default function Finances() {
             </tr>
           </thead>
           <tbody>
-            {mockTrips.map(trip => (
-              <tr key={trip.id} className={trip.estado === 'Cancelado' ? 'row-cancelled' : ''}>
-                <td>#{trip.id}</td>
-                <td>{trip.fecha}</td>
-                <td>{trip.chofer}</td>
-                <td>{trip.pasajero}</td>
+            {trips.map(trip => (
+              <tr key={trip.id} className={trip.estado === 'cancelado' ? 'row-cancelled' : ''}>
+                <td>{trip.id.substring(0,6)}...</td>
+                <td>{new Date(trip.fecha).toLocaleString()}</td>
+                <td>{trip.numero_movil ? `Móvil #${trip.numero_movil} - ${trip.chofer_nombre} ${trip.chofer_apellido}` : 'Sin asignar'}</td>
+                <td>{trip.pasajero_nombre} {trip.pasajero_apellido}</td>
                 <td>
-                  <span className={`pay-badge ${trip.pago === 'Efectivo' ? 'pay-cash' : 'pay-mp'}`}>
-                    {trip.pago}
+                  <span className={`pay-badge ${trip.metodo_pago === 'mercadopago' ? 'pay-mp' : 'pay-cash'}`}>
+                    {trip.metodo_pago || 'efectivo'}
                   </span>
                 </td>
                 <td>
-                  <span className={`status-badge ${trip.estado === 'Finalizado' ? 'status-ok' : 'status-bad'}`}>
-                    {trip.estado}
+                  <span className={`status-badge ${trip.estado === 'finalizado' ? 'status-ok' : (trip.estado === 'cancelado' ? 'status-bad' : 'status-pending')}`}>
+                    {trip.estado.toUpperCase()}
                   </span>
                 </td>
                 <td className="text-right">
-                  <strong>${trip.monto.toLocaleString()}</strong>
+                  <strong>${Number(trip.monto_calculado || 0).toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>
                 </td>
               </tr>
             ))}

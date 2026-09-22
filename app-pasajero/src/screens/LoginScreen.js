@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, useColorScheme } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, useColorScheme, Switch } from 'react-native';
 
 const API_URL = 'https://taxis-alberdi-backend.onrender.com'; 
 
 export default function LoginScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [esJubilado, setEsJubilado] = useState(false);
   const [loading, setLoading] = useState(false);
   const isDarkMode = useColorScheme() === 'dark';
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -30,7 +31,7 @@ export default function LoginScreen({ navigation }) {
       const response = await fetch(`${API_URL}/api/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, apellido: '', telefono }),
+        body: JSON.stringify({ nombre, apellido: '', telefono, es_jubilado: esJubilado }),
       });
 
       const data = await response.json();
@@ -69,6 +70,16 @@ export default function LoginScreen({ navigation }) {
         value={telefono}
         onChangeText={setTelefono}
       />
+
+      <View style={styles.switchContainer}>
+        <Text style={[styles.switchLabel, { color: theme.text }]}>¿Sos Jubilado / Pensionado?</Text>
+        <Switch
+          value={esJubilado}
+          onValueChange={setEsJubilado}
+          trackColor={{ false: '#767577', true: theme.accent }}
+          thumbColor={esJubilado ? '#fff' : '#f4f3f4'}
+        />
+      </View>
       
       <TouchableOpacity 
         style={[styles.button, { backgroundColor: theme.accent }]}
@@ -140,5 +151,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 25,
+    paddingHorizontal: 10,
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '600',
   }
 });

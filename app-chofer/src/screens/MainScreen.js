@@ -2,11 +2,25 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
-export default function MainScreen() {
+export default function MainScreen({ route }) {
   const [isOnline, setIsOnline] = useState(false);
+  const [activeTrip, setActiveTrip] = useState(null);
+  
+  // En React Native (sin web) simularemos un chofer si no viene por params
+  const chofer = route?.params?.chofer || { id: 'sim-native' };
 
   const isDarkMode = useColorScheme() === 'dark';
   const theme = isDarkMode ? darkTheme : lightTheme;
+
+  const handleToggleStatus = async () => {
+    if (!isOnline && activeTrip) {
+      // Simulación en Native. Debería venir de tu backend.
+      // (Aquí luego agregaremos fetch() real cuando integremos Socket.IO en native)
+      alert("Viaje Finalizado (Simulado en Native)");
+      setActiveTrip(null);
+    }
+    setIsOnline(!isOnline);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -36,7 +50,7 @@ export default function MainScreen() {
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
         <TouchableOpacity 
           style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : '#10b981' }]}
-          onPress={() => setIsOnline(!isOnline)}
+          onPress={handleToggleStatus}
         >
           <Text style={styles.buttonText}>{isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)'}</Text>
         </TouchableOpacity>

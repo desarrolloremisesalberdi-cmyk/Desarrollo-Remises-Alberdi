@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
     telefono VARCHAR(50) NOT NULL,
     observaciones TEXT,
     dni_foto_url TEXT,
+    es_jubilado BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -49,6 +50,23 @@ CREATE TABLE IF NOT EXISTS public.viajes (
     destino_lat DOUBLE PRECISION,
     destino_lng DOUBLE PRECISION,
     monto_calculado DECIMAL(10, 2),
+    comision_admin DECIMAL(10, 2),
+    distancia_km DECIMAL(10, 2),
+    hora_inicio TIMESTAMP WITH TIME ZONE,
+    hora_fin TIMESTAMP WITH TIME ZONE,
     metodo_pago VARCHAR(20), -- efectivo, mercadopago
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 4. Tabla de Tarifas
+CREATE TABLE IF NOT EXISTS public.tarifas (
+    id SERIAL PRIMARY KEY,
+    bajada_bandera_diurna DECIMAL(10, 2) NOT NULL,
+    precio_100m_diurna DECIMAL(10, 2) NOT NULL,
+    bajada_bandera_jubilados DECIMAL(10, 2) NOT NULL,
+    precio_100m_jubilados DECIMAL(10, 2) NOT NULL,
+    bajada_bandera_nocturna DECIMAL(10, 2) NOT NULL,
+    precio_100m_nocturna DECIMAL(10, 2) NOT NULL,
+    porcentaje_comision_agencia DECIMAL(5, 2) NOT NULL DEFAULT 15.00,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
