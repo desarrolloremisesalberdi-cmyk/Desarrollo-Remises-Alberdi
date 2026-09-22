@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Alert, useColorScheme } from 'react-native';
 import { io } from 'socket.io-client';
 
 const API_URL = 'http://localhost:3000';
@@ -11,6 +11,9 @@ export default function MainScreen({ route }) {
 
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
+
+  const isDarkMode = useColorScheme() === 'dark';
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
     // Escuchar solicitudes de viaje nuevas
@@ -65,8 +68,8 @@ export default function MainScreen({ route }) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.mapPlaceholder}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
         <iframe 
           title="Mapa de Casilda"
           src="https://www.openstreetmap.org/export/embed.html?bbox=-61.19,-33.06,-61.14,-33.02&layer=mapnik"
@@ -77,18 +80,18 @@ export default function MainScreen({ route }) {
       {/* Notificación de Nuevo Viaje */}
       {incomingRide && (
         <View style={styles.notificationOverlay}>
-          <View style={styles.notificationCard}>
-            <Text style={styles.notificationTitle}>🚕 ¡NUEVO VIAJE!</Text>
-            <Text style={styles.notificationText}>ID Viaje: #{incomingRide.id || 'N/A'}</Text>
-            <Text style={styles.notificationText}>
+          <View style={[styles.notificationCard, { backgroundColor: theme.cardBg, borderColor: theme.accent }]}>
+            <Text style={[styles.notificationTitle, { color: theme.accent }]}>🚕 ¡NUEVO VIAJE!</Text>
+            <Text style={[styles.notificationText, { color: theme.text }]}>ID Viaje: #{incomingRide.id || 'N/A'}</Text>
+            <Text style={[styles.notificationText, { color: theme.text }]}>
               Se requiere un móvil en las coordenadas: {incomingRide.origen_lat}, {incomingRide.origen_lng}
             </Text>
             
             <View style={styles.notificationActions}>
-              <TouchableOpacity style={[styles.btnAction, {backgroundColor: '#dc3545'}]} onPress={rechazarViaje}>
+              <TouchableOpacity style={[styles.btnAction, {backgroundColor: '#ef4444'}]} onPress={rechazarViaje}>
                 <Text style={styles.btnText}>Rechazar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btnAction, {backgroundColor: '#28a745'}]} onPress={aceptarViaje}>
+              <TouchableOpacity style={[styles.btnAction, {backgroundColor: '#10b981'}]} onPress={aceptarViaje}>
                 <Text style={styles.btnText}>¡ACEPTAR!</Text>
               </TouchableOpacity>
             </View>
@@ -96,15 +99,15 @@ export default function MainScreen({ route }) {
         </View>
       )}
 
-      <View style={styles.header}>
-        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#39ff14' : '#dc3545' }]} />
-        <Text style={styles.statusText}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
+      <View style={[styles.header, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#10b981' : '#ef4444' }]} />
+        <Text style={[styles.statusText, { color: theme.text }]}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
       </View>
 
-      <View style={styles.bottomCard}>
-        <Text style={styles.title}>Recaudación Hoy: $0</Text>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
         <TouchableOpacity 
-          style={[styles.button, { backgroundColor: isOnline ? '#dc3545' : '#39ff14' }]}
+          style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : '#10b981' }]}
           onPress={() => setIsOnline(!isOnline)}
         >
           <Text style={styles.buttonText}>{isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)'}</Text>
@@ -114,40 +117,46 @@ export default function MainScreen({ route }) {
   );
 }
 
+const darkTheme = {
+  bg: '#0f172a',
+  cardBg: 'rgba(30, 41, 59, 0.95)',
+  border: 'rgba(255, 255, 255, 0.1)',
+  text: '#f8fafc',
+  accent: '#f59e0b', // Ámbar (Chofer)
+};
+
+const lightTheme = {
+  bg: '#f1f5f9',
+  cardBg: 'rgba(255, 255, 255, 0.95)',
+  border: 'rgba(0, 0, 0, 0.1)',
+  text: '#0f172a',
+  accent: '#f59e0b',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050505',
   },
   mapPlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#111',
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: '#888',
-    textAlign: 'center',
-    fontWeight: '500',
   },
   header: {
     position: 'absolute',
     top: 50,
     alignSelf: 'center',
-    backgroundColor: 'rgba(20, 20, 22, 0.95)',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#39ff14',
+    shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 10,
     elevation: 5,
     borderWidth: 1,
-    borderColor: 'rgba(57, 255, 20, 0.2)',
   },
   statusIndicator: {
     width: 12,
@@ -162,31 +171,27 @@ const styles = StyleSheet.create({
   statusText: {
     fontWeight: '700',
     fontSize: 15,
-    color: '#fff',
     letterSpacing: 0.3,
   },
   bottomCard: {
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: 'rgba(20, 20, 22, 0.95)',
     padding: 25,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    shadowColor: '#39ff14',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.1,
     shadowRadius: 15,
     elevation: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(57, 255, 20, 0.2)',
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 20,
     textAlign: 'center',
-    color: '#fff',
   },
   button: {
     padding: 18,
@@ -211,32 +216,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
-    backdropFilter: 'blur(8px)',
   },
   notificationCard: {
-    backgroundColor: '#111',
     padding: 35,
     borderRadius: 24,
     width: '85%',
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: '#39ff14',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 15,
     borderWidth: 1,
-    borderColor: 'rgba(57, 255, 20, 0.3)',
   },
   notificationTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#39ff14',
     marginBottom: 15,
   },
   notificationText: {
     fontSize: 16,
-    color: '#ccc',
     textAlign: 'center',
     marginBottom: 10,
     lineHeight: 22,

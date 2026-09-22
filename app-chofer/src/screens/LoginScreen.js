@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme } from 'react-native';
 
 const API_URL = 'https://taxis-alberdi-backend.onrender.com';
 
 export default function LoginScreen({ navigation }) {
   const [dni, setDni] = useState('');
   const [clave, setClave] = useState('');
+
+  const isDarkMode = useColorScheme() === 'dark';
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -44,27 +47,29 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Panel de Chofer</Text>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.bg }]}>
+      <Text style={[styles.title, { color: theme.text }]}>Portal Chofer</Text>
       
-      <Text style={styles.subtitle}>Iniciar Sesión</Text>
+      <Text style={[styles.subtitle, { color: theme.text }]}>Iniciar Sesión</Text>
       <TextInput 
-        style={styles.input} 
+        style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]} 
         placeholder="DNI" 
+        placeholderTextColor={theme.placeholder}
         keyboardType="numeric" 
         value={dni}
         onChangeText={setDni}
       />
       <TextInput 
-        style={styles.input} 
+        style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]} 
         placeholder="Clave (Asignada por Operador)" 
+        placeholderTextColor={theme.placeholder}
         secureTextEntry={true} 
         value={clave}
         onChangeText={setClave}
       />
       
       <TouchableOpacity 
-        style={styles.button}
+        style={[styles.button, { backgroundColor: theme.accent }]}
         onPress={handleLogin}
       >
         <Text style={styles.buttonText}>Entrar a Trabajar</Text>
@@ -73,10 +78,27 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+const darkTheme = {
+  bg: '#0f172a',
+  cardBg: 'rgba(30, 41, 59, 0.7)',
+  border: 'rgba(255, 255, 255, 0.1)',
+  text: '#f8fafc',
+  placeholder: '#94a3b8',
+  accent: '#f59e0b', // Ámbar (Chofer)
+};
+
+const lightTheme = {
+  bg: '#f1f5f9',
+  cardBg: 'rgba(255, 255, 255, 0.8)',
+  border: 'rgba(0, 0, 0, 0.1)',
+  text: '#0f172a',
+  placeholder: '#64748b',
+  accent: '#f59e0b',
+};
+
 const styles = StyleSheet.create({
   container: {
     padding: 30,
-    backgroundColor: '#050505',
     flexGrow: 1,
     justifyContent: 'center'
   },
@@ -85,35 +107,28 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 50,
-    color: '#39ff14',
-    textShadowColor: 'rgba(57, 255, 20, 0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10
+    letterSpacing: -1,
   },
   subtitle: {
     fontSize: 20,
     fontWeight: '700',
     marginTop: 15,
     marginBottom: 20,
-    color: '#fff',
   },
   input: {
     height: 55,
-    backgroundColor: '#111',
-    borderColor: '#39ff14',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 20,
     marginBottom: 20,
     fontSize: 16,
-    color: '#fff'
   },
   button: {
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 25,
-    shadowColor: '#10b981',
+    shadowColor: '#f59e0b',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
 export default function MainScreen() {
   const [isOnline, setIsOnline] = useState(false);
 
+  const isDarkMode = useColorScheme() === 'dark';
+  const theme = isDarkMode ? darkTheme : lightTheme;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <MapView
         style={styles.map}
         initialRegion={{
@@ -24,15 +27,15 @@ export default function MainScreen() {
         />
       </MapView>
       
-      <View style={styles.header}>
-        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#28a745' : '#dc3545' }]} />
-        <Text style={styles.statusText}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
+      <View style={[styles.header, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#10b981' : '#ef4444' }]} />
+        <Text style={[styles.statusText, { color: theme.text }]}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
       </View>
 
-      <View style={styles.bottomCard}>
-        <Text style={styles.title}>Recaudación Hoy: $0</Text>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
         <TouchableOpacity 
-          style={[styles.button, { backgroundColor: isOnline ? '#dc3545' : '#28a745' }]}
+          style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : '#10b981' }]}
           onPress={() => setIsOnline(!isOnline)}
         >
           <Text style={styles.buttonText}>{isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)'}</Text>
@@ -41,6 +44,22 @@ export default function MainScreen() {
     </View>
   );
 }
+
+const darkTheme = {
+  bg: '#0f172a',
+  cardBg: 'rgba(30, 41, 59, 0.95)',
+  border: 'rgba(255, 255, 255, 0.1)',
+  text: '#f8fafc',
+  accent: '#f59e0b', // Ámbar (Chofer)
+};
+
+const lightTheme = {
+  bg: '#f1f5f9',
+  cardBg: 'rgba(255, 255, 255, 0.95)',
+  border: 'rgba(0, 0, 0, 0.1)',
+  text: '#0f172a',
+  accent: '#f59e0b',
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -53,16 +72,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 1,
   },
   statusIndicator: {
     width: 15,
@@ -78,15 +98,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: 'white',
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    padding: 25,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
+    shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowRadius: 15,
+    elevation: 10,
+    borderTopWidth: 1,
   },
   title: {
     fontSize: 18,
@@ -95,13 +115,19 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   button: {
-    padding: 15,
-    borderRadius: 10,
+    padding: 18,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   buttonText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   }
 });
