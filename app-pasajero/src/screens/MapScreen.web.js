@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 const API_URL = 'https://taxis-alberdi-backend.onrender.com';
 const socket = io(API_URL);
 
-export default function MapScreen({ route }) {
+export default function MapScreen({ route, navigation }) {
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);
   
@@ -62,6 +62,9 @@ export default function MapScreen({ route }) {
     } finally {
       setSolicitando(false);
     }
+  const handleLogout = () => {
+    localStorage.removeItem('pasajero_user');
+    navigation.replace('Login');
   };
 
   return (
@@ -77,6 +80,10 @@ export default function MapScreen({ route }) {
             <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
           </View>
         )}
+        
+        <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
+        </TouchableOpacity>
       </View>
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
@@ -138,6 +145,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
     textAlign: 'center',
+  },
+  logoutBtn: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
   },
   bottomCard: {
     position: 'absolute',

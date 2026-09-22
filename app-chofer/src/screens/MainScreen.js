@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
-export default function MainScreen({ route }) {
+export default function MainScreen({ route, navigation }) {
   const [isOnline, setIsOnline] = useState(false);
   const [activeTrip, setActiveTrip] = useState(null);
   
@@ -20,6 +20,10 @@ export default function MainScreen({ route }) {
       setActiveTrip(null);
     }
     setIsOnline(!isOnline);
+  };
+
+  const handleLogout = () => {
+    navigation.replace('Login');
   };
 
   return (
@@ -45,6 +49,10 @@ export default function MainScreen({ route }) {
         <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#10b981' : '#ef4444' }]} />
         <Text style={[styles.statusText, { color: theme.text }]}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
       </View>
+
+      <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
+        <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
+      </TouchableOpacity>
 
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
@@ -105,8 +113,23 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   statusText: {
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.3,
+  },
+  logoutBtn: {
+    position: 'absolute',
+    top: 110, // Debajo del header principal
+    alignSelf: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 5,
   },
   bottomCard: {
     position: 'absolute',

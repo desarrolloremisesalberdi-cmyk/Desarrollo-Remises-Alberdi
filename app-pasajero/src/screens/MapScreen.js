@@ -1,10 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
-export default function MapScreen() {
+export default function MapScreen({ route, navigation }) {
   const isDarkMode = useColorScheme() === 'dark';
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const [solicitando, setSolicitando] = useState(false);
+  const [estadoViaje, setEstadoViaje] = useState(null);
+
+  const pedirTaxi = () => {
+    setSolicitando(true);
+    setTimeout(() => {
+      setEstadoViaje('¡Un chofer aceptó tu viaje y está en camino!');
+      setSolicitando(false);
+    }, 3000);
+  };
+
+  const handleLogout = () => {
+    navigation.replace('Login');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -25,11 +39,25 @@ export default function MapScreen() {
           flipY={false}
         />
       </MapView>
+
+      {estadoViaje && (
+        <View style={[styles.statusCard, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+          <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
+        </View>
+      )}
+      
+      <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
+        <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
+      </TouchableOpacity>
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>¿A dónde vas?</Text>
-        <TouchableOpacity style={[styles.button, { backgroundColor: theme.accent }]}>
-          <Text style={styles.buttonText}>Pedir Taxi Ahora</Text>
+        <TouchableOpacity 
+          style={[styles.button, { backgroundColor: theme.accent }]}
+          onPress={pedirTaxi}
+          disabled={solicitando}
+        >
+          <Text style={styles.buttonText}>{solicitando ? 'Solicitando...' : 'Pedir Taxi Ahora'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -75,9 +103,40 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     marginBottom: 20,
     letterSpacing: -0.5,
+  },
+  logoutBtn: {
+    position: 'absolute',
+    top: 50, // Más abajo en native por el notch
+    right: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  statusCard: {
+    position: 'absolute',
+    top: 110,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statusText: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   button: {
     padding: 18,

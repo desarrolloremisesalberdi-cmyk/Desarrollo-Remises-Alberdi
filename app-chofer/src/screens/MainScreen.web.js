@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 const API_URL = 'https://taxis-alberdi-backend.onrender.com';
 const socket = io(API_URL);
 
-export default function MainScreen({ route }) {
+export default function MainScreen({ route, navigation }) {
   const [isOnline, setIsOnline] = useState(true); // Lo ponemos true por defecto para pruebas
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
@@ -95,6 +95,11 @@ export default function MainScreen({ route }) {
     setIsOnline(!isOnline);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('chofer_user');
+    navigation.replace('Login');
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
@@ -131,6 +136,10 @@ export default function MainScreen({ route }) {
         <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#10b981' : '#ef4444' }]} />
         <Text style={[styles.statusText, { color: theme.text }]}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
       </View>
+      
+      <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
+        <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
+      </TouchableOpacity>
 
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
@@ -200,6 +209,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
     letterSpacing: 0.3,
+  },
+  logoutBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 24,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 5,
   },
   bottomCard: {
     position: 'absolute',
