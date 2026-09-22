@@ -28,6 +28,22 @@ export default function MapScreen({ route, navigation }) {
     };
   }, [user.id]);
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity 
+          style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
+          onPress={() => {
+            if(window.localStorage) window.localStorage.removeItem('pasajero_user');
+            navigation.replace('Login');
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
+        </TouchableOpacity>
+      )
+    });
+  }, [navigation]);
+
   const pedirTaxi = async () => {
     if (!user.id) {
       alert('Error: No estás logueado en la base de datos.');
@@ -62,9 +78,6 @@ export default function MapScreen({ route, navigation }) {
     } finally {
       setSolicitando(false);
     }
-  const handleLogout = () => {
-    localStorage.removeItem('pasajero_user');
-    navigation.replace('Login');
   };
 
   return (
@@ -80,10 +93,6 @@ export default function MapScreen({ route, navigation }) {
             <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
           </View>
         )}
-        
-        <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
-        </TouchableOpacity>
       </View>
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
@@ -145,19 +154,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
     textAlign: 'center',
-  },
-  logoutBtn: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
   },
   bottomCard: {
     position: 'absolute',

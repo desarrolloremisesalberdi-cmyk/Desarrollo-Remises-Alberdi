@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
@@ -16,9 +16,18 @@ export default function MapScreen({ route, navigation }) {
     }, 3000);
   };
 
-  const handleLogout = () => {
-    navigation.replace('Login');
-  };
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity 
+          style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
+          onPress={() => navigation.replace('Login')}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
+        </TouchableOpacity>
+      )
+    });
+  }, [navigation]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -45,10 +54,6 @@ export default function MapScreen({ route, navigation }) {
           <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
         </View>
       )}
-      
-      <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
-        <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
-      </TouchableOpacity>
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>¿A dónde vas?</Text>
@@ -106,19 +111,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 20,
     letterSpacing: -0.5,
-  },
-  logoutBtn: {
-    position: 'absolute',
-    top: 50, // Más abajo en native por el notch
-    right: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
   },
   statusCard: {
     position: 'absolute',
