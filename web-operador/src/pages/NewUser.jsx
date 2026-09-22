@@ -15,7 +15,8 @@ export default function NewUser() {
     vehiculo_color: '',
     vehiculo_patente: '',
     vehiculo_puertas: '4', // Por defecto 4 según requerimientos
-    datos_cobro: ''
+    datos_cobro: '',
+    foto_url: ''
   });
 
   const handleChange = (e) => {
@@ -71,6 +72,14 @@ export default function NewUser() {
               <div className="form-group">
                 <label>Vencimiento Carnet de Conducir</label>
                 <input type="date" name="licencia_vencimiento" onChange={handleChange} required />
+              </div>
+              <div className="form-group file-upload">
+                <label>Foto de Perfil del Chofer (URL temporal)</label>
+                <div className="upload-box" style={{ flexDirection: 'column', gap: 10 }}>
+                  <input type="text" name="foto_url" value={formData.foto_url} onChange={handleChange} placeholder="https://ejemplo.com/mifoto.jpg" style={{ width: '90%' }} />
+                  <span>o</span>
+                  <div><Upload size={16} /> Subir Imagen (Próximamente)</div>
+                </div>
               </div>
               <div className="form-group file-upload">
                 <label>Foto Carnet de Conducir</label>

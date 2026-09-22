@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
 export default function MapScreen({ route, navigation }) {
@@ -7,11 +7,13 @@ export default function MapScreen({ route, navigation }) {
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);
+  const [choferAsignado, setChoferAsignado] = useState(null);
 
   const pedirTaxi = () => {
     setSolicitando(true);
     setTimeout(() => {
       setEstadoViaje('¡Un chofer aceptó tu viaje y está en camino!');
+      setChoferAsignado({ foto_url: 'https://i.pravatar.cc/150?u=demo' });
       setSolicitando(false);
     }, 3000);
   };
@@ -51,6 +53,12 @@ export default function MapScreen({ route, navigation }) {
 
       {estadoViaje && (
         <View style={[styles.statusCard, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+          {choferAsignado && choferAsignado.foto_url && (
+            <Image 
+              source={{ uri: choferAsignado.foto_url }} 
+              style={{ width: 60, height: 60, borderRadius: 30, alignSelf: 'center', marginBottom: 10, borderWidth: 2, borderColor: theme.accent }}
+            />
+          )}
           <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
         </View>
       )}

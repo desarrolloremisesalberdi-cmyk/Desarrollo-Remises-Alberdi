@@ -8,6 +8,7 @@ const socket = io(API_URL);
 export default function MapScreen({ route, navigation }) {
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);
+  const [choferAsignado, setChoferAsignado] = useState(null);
   
   // Recibir el usuario desde el Login (si existe)
   const user = route?.params?.user || { id: null, nombre: 'Invitado' };
@@ -20,6 +21,7 @@ export default function MapScreen({ route, navigation }) {
       // Si el viaje aceptado corresponde a este pasajero
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`¡El chofer ${data.chofer.nombre} ${data.chofer.apellido} está en camino!\nMóvil #${data.chofer.numero_movil} - ${data.chofer.vehiculo_modelo} (Patente: ${data.chofer.vehiculo_patente})`);
+        setChoferAsignado(data.chofer);
       }
     });
 
@@ -90,6 +92,13 @@ export default function MapScreen({ route, navigation }) {
         />
         {estadoViaje && (
           <View style={[styles.statusCard, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+            {choferAsignado && choferAsignado.foto_url && (
+              <img 
+                src={choferAsignado.foto_url} 
+                alt="Chofer" 
+                style={{ width: 60, height: 60, borderRadius: '50%', alignSelf: 'center', marginBottom: 10, borderWidth: 2, borderColor: theme.accent }}
+              />
+            )}
             <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
           </View>
         )}

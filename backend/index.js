@@ -138,7 +138,7 @@ app.post('/api/viajes/accept', async (req, res) => {
 
     // 2. Buscar datos del chofer para avisarle al pasajero
     const choferQuery = await db.query(
-      'SELECT nombre, apellido, numero_movil, vehiculo_modelo, vehiculo_patente FROM choferes WHERE id = $1',
+      'SELECT nombre, apellido, numero_movil, vehiculo_modelo, vehiculo_patente, foto_url FROM choferes WHERE id = $1',
       [chofer_id]
     );
     
@@ -217,15 +217,15 @@ app.post('/api/viajes/finish', async (req, res) => {
 });
 
 
-// Obtener choferes activos (libres u ocupados) con sus ubicaciones
+// Obtener choferes activos (online)
 app.get('/api/choferes/activos', async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre, apellido, dni, numero_movil, estado, lat, lng, is_online FROM choferes WHERE is_online = true OR estado IN ('libre', 'ocupado')"
+      'SELECT id, nombre, apellido, dni, numero_movil, lat, lng, is_online, foto_url FROM choferes WHERE is_online = true'
     );
     res.json({ success: true, choferes: result.rows });
   } catch (error) {
-    console.error('Error al obtener choferes activos:', error);
+    console.error('Error:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });
@@ -234,12 +234,12 @@ app.get('/api/choferes/activos', async (req, res) => {
 app.get('/api/choferes', async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, vehiculo_patente FROM choferes ORDER BY numero_movil ASC"
+      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, is_online, lat, lng, foto_url FROM choferes ORDER BY nombre ASC"
     );
     res.json({ success: true, choferes: result.rows });
   } catch (error) {
-    console.error('Error al obtener todos los choferes:', error);
-    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    console.error('Error al obtener choferes:', error);
+    res.status(500).json({ success: false, error: 'Error al cargar choferes' });
   }
 });
 

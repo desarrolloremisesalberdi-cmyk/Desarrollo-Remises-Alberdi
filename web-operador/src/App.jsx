@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
 import { io } from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
@@ -30,7 +31,8 @@ function DashboardMap() {
               movil: ch.numero_movil,
               lat: ch.lat,
               lng: ch.lng,
-              isOnline: ch.is_online
+              isOnline: ch.is_online,
+              foto_url: ch.foto_url
             };
           });
           setActiveDrivers(dict);
@@ -69,15 +71,42 @@ function DashboardMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; OpenStreetMap contributors'
           />
-          {driversList.map(driver => (
-            <Marker key={driver.chofer_id} position={[driver.lat, driver.lng]}>
-              <Popup>
-                Móvil #{driver.movil} <br/> 
-                {driver.isOnline ? 'Auto Libre (Verde)' : 'Auto Ocupado (Rojo)'} <br/>
-                DNI: {driver.dni}
-              </Popup>
-            </Marker>
-          ))}
+          {driversList.map(driver => {
+            const borderColor = driver.isOnline ? '#10b981' : '#ef4444';
+            const imageUrl = driver.foto_url || 'https://via.placeholder.com/150';
+            const iconHtml = `
+              <div style="
+                width: 40px; 
+                height: 40px; 
+                border-radius: 50%; 
+                border: 3px solid ${borderColor}; 
+                background-image: url('${imageUrl}'); 
+                background-size: cover; 
+                background-position: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+              "></div>
+            `;
+            const customIcon = L.divIcon({
+              className: 'custom-driver-icon',
+              html: iconHtml,
+              iconSize: [40, 40],
+              iconAnchor: [20, 20]
+            });
+
+            return (
+              <Marker key={driver.chofer_id} position={[driver.lat, driver.lng]} icon={customIcon}>
+                <Popup>
+                  <div style={{ textAlign: 'center' }}>
+                    <img src={imageUrl} alt="Chofer" style={{ width: 60, height: 60, borderRadius: '50%', marginBottom: 5 }} />
+                    <br />
+                    <strong>Móvil #{driver.movil}</strong><br/>
+                    {driver.isOnline ? 'Auto Libre (Verde)' : 'Auto Ocupado (Rojo)'} <br/>
+                    DNI: {driver.dni}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </div>
       

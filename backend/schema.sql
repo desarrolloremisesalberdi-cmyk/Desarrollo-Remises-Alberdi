@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS public.choferes (
     vehiculo_color VARCHAR(50),
     vehiculo_patente VARCHAR(20) UNIQUE,
     vehiculo_foto_url TEXT,
+    foto_url TEXT,
+    lat DECIMAL(10, 8),
+    lng DECIMAL(11, 8),
+    is_online BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
