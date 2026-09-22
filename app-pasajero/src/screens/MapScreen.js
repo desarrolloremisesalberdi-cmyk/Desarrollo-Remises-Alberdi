@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
 export default function MapScreen() {
+  const isDarkMode = useColorScheme() === 'dark';
+  const theme = isDarkMode ? darkTheme : lightTheme;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
       {/* Mapa usando OpenStreetMap para ser 100% gratuito */}
       <MapView
         style={styles.map}
@@ -23,15 +26,31 @@ export default function MapScreen() {
         />
       </MapView>
       
-      <View style={styles.bottomCard}>
-        <Text style={styles.title}>¿A dónde vas?</Text>
-        <TouchableOpacity style={styles.button}>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.text }]}>¿A dónde vas?</Text>
+        <TouchableOpacity style={[styles.button, { backgroundColor: theme.accent }]}>
           <Text style={styles.buttonText}>Pedir Taxi Ahora</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
+
+const darkTheme = {
+  bg: '#0f172a',
+  cardBg: 'rgba(30, 41, 59, 0.95)',
+  border: 'rgba(255, 255, 255, 0.1)',
+  text: '#f8fafc',
+  accent: '#10b981', // Verde Esmeralda (Cliente)
+};
+
+const lightTheme = {
+  bg: '#f1f5f9',
+  cardBg: 'rgba(255, 255, 255, 0.95)',
+  border: 'rgba(0, 0, 0, 0.1)',
+  text: '#0f172a',
+  accent: '#10b981',
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -44,30 +63,36 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: 'white',
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
+    padding: 25,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowRadius: 15,
+    elevation: 10,
+    borderTopWidth: 1,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 20,
+    letterSpacing: -0.5,
   },
   button: {
-    backgroundColor: '#007BFF',
-    padding: 15,
-    borderRadius: 10,
+    padding: 18,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   }
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, useColorScheme } from 'react-native';
 
 const API_URL = 'https://taxis-alberdi-backend.onrender.com'; 
 
@@ -7,6 +7,8 @@ export default function LoginScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
   const [loading, setLoading] = useState(false);
+  const isDarkMode = useColorScheme() === 'dark';
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -49,30 +51,32 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Radio Taxi Alberdi</Text>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <Text style={[styles.title, { color: theme.text }]}>Remises Alberdi</Text>
       
       <TextInput 
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]}
         placeholder="Nombre y Apellido"
+        placeholderTextColor={theme.placeholder}
         value={nombre}
         onChangeText={setNombre}
       />
       <TextInput 
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]}
         placeholder="Teléfono"
+        placeholderTextColor={theme.placeholder}
         keyboardType="phone-pad"
         value={telefono}
         onChangeText={setTelefono}
       />
       
       <TouchableOpacity 
-        style={styles.button}
+        style={[styles.button, { backgroundColor: theme.accent }]}
         onPress={handleLogin}
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="white" />
+          <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.buttonText}>Ingresar</Text>
         )}
@@ -81,44 +85,55 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+const darkTheme = {
+  bg: '#0f172a',
+  cardBg: 'rgba(30, 41, 59, 0.7)',
+  border: 'rgba(255, 255, 255, 0.1)',
+  text: '#f8fafc',
+  placeholder: '#94a3b8',
+  accent: '#10b981', // Verde Esmeralda (Cliente)
+};
+
+const lightTheme = {
+  bg: '#f1f5f9',
+  cardBg: 'rgba(255, 255, 255, 0.8)',
+  border: 'rgba(0, 0, 0, 0.1)',
+  text: '#0f172a',
+  placeholder: '#64748b',
+  accent: '#10b981',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 30,
     justifyContent: 'center',
-    backgroundColor: '#050505',
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 50,
-    color: '#39ff14',
-    textShadowColor: 'rgba(57, 255, 20, 0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10
+    letterSpacing: -1,
   },
   input: {
     height: 55,
-    backgroundColor: '#111',
-    borderColor: '#39ff14',
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 20,
     marginBottom: 20,
     fontSize: 16,
-    color: '#fff'
   },
   button: {
-    backgroundColor: '#39ff14',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#39ff14',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 10
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   buttonText: {
     color: '#fff',
