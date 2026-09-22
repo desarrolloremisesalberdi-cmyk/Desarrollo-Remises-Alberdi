@@ -20,7 +20,7 @@ export default function AppNavigator() {
         <Stack.Screen 
           name="Main" 
           component={MainScreen} 
-          options={{ headerShown: false }} 
+          options={{ title: 'Panel del Chofer', headerBackVisible: false }} 
         />
         <Stack.Screen 
           name="Resumen" 

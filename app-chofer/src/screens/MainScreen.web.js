@@ -39,6 +39,30 @@ export default function MainScreen({ route, navigation }) {
     };
   }, [isOnline, chofer]);
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity 
+            style={{ marginRight: 10, padding: 8, backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border, borderRadius: 6 }} 
+            onPress={() => navigation.navigate('Resumen', { chofer })}
+          >
+            <Text style={{ color: theme.text, fontWeight: 'bold' }}>Resumen</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
+            onPress={() => {
+              if (window.localStorage) window.localStorage.removeItem('chofer_user');
+              navigation.replace('Login');
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    });
+  }, [navigation, chofer, theme]);
+
   const aceptarViaje = async () => {
     if (!chofer.id || !incomingRide) return;
 
@@ -95,11 +119,6 @@ export default function MainScreen({ route, navigation }) {
     setIsOnline(!isOnline);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('chofer_user');
-    navigation.replace('Login');
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
@@ -136,14 +155,6 @@ export default function MainScreen({ route, navigation }) {
         <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#10b981' : '#ef4444' }]} />
         <Text style={[styles.statusText, { color: theme.text }]}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
       </View>
-      
-      <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={handleLogout}>
-        <Text style={{ color: theme.text, fontWeight: '700' }}>Cerrar Sesión</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.resumenBtn, { backgroundColor: theme.cardBg, borderColor: theme.border }]} onPress={() => navigation.navigate('Resumen', { chofer })}>
-        <Text style={{ color: theme.text, fontWeight: '700' }}>Resumen</Text>
-      </TouchableOpacity>
 
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
@@ -213,34 +224,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
     letterSpacing: 0.3,
-  },
-  logoutBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 24,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  resumenBtn: {
-    position: 'absolute',
-    top: 50,
-    left: 24,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 5,
   },
   bottomCard: {
     position: 'absolute',
