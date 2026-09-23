@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image, TextInput, ActivityIndicator, Vibration } from 'react-native';
 import MapView, { UrlTile } from 'react-native-maps';
 
 export default function MapScreen({ route, navigation }) {
@@ -9,11 +9,75 @@ export default function MapScreen({ route, navigation }) {
   const [estadoViaje, setEstadoViaje] = useState(null);
   const [choferAsignado, setChoferAsignado] = useState(null);
 
+  const [origenTexto, setOrigenTexto] = useState('');
+  const [destinoTexto, setDestinoTexto] = useState('');
+  const [calculando, setCalculando] = useState(false);
+  const [datosViaje, setDatosViaje] = useState(null);
+
+  // Fórmula de Haversine para calcular distancia en km
+  const calcularDistancia = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radio de la tierra en km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+  };
+
+  const geocodeAddress = async (address) => {
+    const query = encodeURIComponent(`${address}, Casilda, Santa Fe, Argentina`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+    return null;
+  };
+
+  const calcularViaje = async () => {
+    if (!origenTexto || !destinoTexto) {
+      alert('Por favor ingresa origen y destino');
+      return;
+    }
+    setCalculando(true);
+    try {
+      const coordsOrigen = await geocodeAddress(origenTexto);
+      const coordsDestino = await geocodeAddress(destinoTexto);
+      
+      if (!coordsOrigen || !coordsDestino) {
+        alert('No se pudieron encontrar las calles. Intenta ser más específico.');
+        setCalculando(false);
+        return;
+      }
+      
+      const dist = calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng);
+      const precio = 500 + (dist * 500);
+      
+      setDatosViaje({
+        origen: coordsOrigen,
+        destino: coordsDestino,
+        distancia: dist.toFixed(2),
+        precio: precio.toFixed(0)
+      });
+    } catch (e) {
+      alert('Error calculando ruta');
+    }
+    setCalculando(false);
+  };
+
   const pedirTaxi = () => {
+    if (!datosViaje) {
+      alert('Primero calcula el viaje.');
+      return;
+    }
     setSolicitando(true);
     setTimeout(() => {
       setEstadoViaje('¡Un chofer aceptó tu viaje y está en camino!');
       setChoferAsignado({ foto_url: 'https://i.pravatar.cc/150?u=demo' });
+      Vibration.vibrate(500); // Vibra por medio segundo
       setSolicitando(false);
     }, 3000);
   };
@@ -64,13 +128,50 @@ export default function MapScreen({ route, navigation }) {
       )}
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.text }]}>¿A dónde vas?</Text>
+        {!estadoViaje && (
+          <View style={{ marginBottom: 15 }}>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
+              placeholder="¿Dónde estás? (Ej: Lisandro 1500)"
+              placeholderTextColor="#888"
+              value={origenTexto}
+              onChangeText={setOrigenTexto}
+            />
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
+              placeholder="¿A dónde vas? (Ej: Sarmiento 2000)"
+              placeholderTextColor="#888"
+              value={destinoTexto}
+              onChangeText={setDestinoTexto}
+            />
+            
+            {datosViaje && (
+              <View style={styles.estimateContainer}>
+                <Text style={[styles.estimateText, { color: theme.text }]}>Distancia: {datosViaje.distancia} km</Text>
+                <Text style={[styles.estimatePrice, { color: theme.accent }]}>Costo Est: ${datosViaje.precio}</Text>
+              </View>
+            )}
+            
+            {!datosViaje ? (
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: '#3b82f6', marginBottom: 10 }]} 
+                onPress={calcularViaje}
+                disabled={calculando}
+              >
+                {calculando ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Calcular Costo</Text>}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+
         <TouchableOpacity 
-          style={[styles.button, { backgroundColor: theme.accent }]}
+          style={[styles.button, estadoViaje ? { backgroundColor: '#10b981'} : (!datosViaje ? {backgroundColor: '#ccc'} : { backgroundColor: theme.accent })]} 
           onPress={pedirTaxi}
-          disabled={solicitando}
+          disabled={solicitando || estadoViaje || !datosViaje}
         >
-          <Text style={styles.buttonText}>{solicitando ? 'Solicitando...' : 'Pedir Taxi Ahora'}</Text>
+          <Text style={styles.buttonText}>
+            {solicitando ? 'Buscando...' : estadoViaje ? 'Taxi Solicitado ✓' : 'Pedir Taxi Ahora'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -153,5 +254,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    marginBottom: 10,
+    fontSize: 15,
+  },
+  estimateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    marginBottom: 10,
+  },
+  estimateText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  estimatePrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
   }
 });

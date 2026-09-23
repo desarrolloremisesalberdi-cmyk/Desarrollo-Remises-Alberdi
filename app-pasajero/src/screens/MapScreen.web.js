@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, TextInput, ActivityIndicator } from 'react-native';
 import { io } from 'socket.io-client';
 
 const API_URL = 'https://taxis-alberdi-backend.onrender.com';
@@ -10,6 +10,11 @@ export default function MapScreen({ route, navigation }) {
   const [estadoViaje, setEstadoViaje] = useState(null);
   const [choferAsignado, setChoferAsignado] = useState(null);
   
+  const [origenTexto, setOrigenTexto] = useState('');
+  const [destinoTexto, setDestinoTexto] = useState('');
+  const [calculando, setCalculando] = useState(false);
+  const [datosViaje, setDatosViaje] = useState(null);
+
   // Recibir el usuario desde el Login (si existe)
   const user = route?.params?.user || { id: null, nombre: 'Invitado' };
 
@@ -22,6 +27,12 @@ export default function MapScreen({ route, navigation }) {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`¡El chofer ${data.chofer.nombre} ${data.chofer.apellido} está en camino!\nMóvil #${data.chofer.numero_movil} - ${data.chofer.vehiculo_modelo} (Patente: ${data.chofer.vehiculo_patente})`);
         setChoferAsignado(data.chofer);
+        try {
+          const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+          audio.play();
+        } catch (e) {
+          console.log('Audio error:', e);
+        }
       }
     });
 
@@ -46,9 +57,69 @@ export default function MapScreen({ route, navigation }) {
     });
   }, [navigation]);
 
+  // Fórmula de Haversine para calcular distancia en km
+  const calcularDistancia = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radio de la tierra en km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+  };
+
+  const geocodeAddress = async (address) => {
+    // Agregamos Casilda por defecto para mayor precisión
+    const query = encodeURIComponent(`${address}, Casilda, Santa Fe, Argentina`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+    return null;
+  };
+
+  const calcularViaje = async () => {
+    if (!origenTexto || !destinoTexto) {
+      alert('Por favor ingresa origen y destino');
+      return;
+    }
+    setCalculando(true);
+    try {
+      const coordsOrigen = await geocodeAddress(origenTexto);
+      const coordsDestino = await geocodeAddress(destinoTexto);
+      
+      if (!coordsOrigen || !coordsDestino) {
+        alert('No se pudieron encontrar las calles. Intenta ser más específico.');
+        setCalculando(false);
+        return;
+      }
+      
+      const dist = calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng);
+      // Precio mock: $500 bajada + $50 por cada 100 metros ($500 por km)
+      const precio = 500 + (dist * 500);
+      
+      setDatosViaje({
+        origen: coordsOrigen,
+        destino: coordsDestino,
+        distancia: dist.toFixed(2),
+        precio: precio.toFixed(0)
+      });
+    } catch (e) {
+      alert('Error calculando ruta');
+    }
+    setCalculando(false);
+  };
+
   const pedirTaxi = async () => {
     if (!user.id) {
       alert('Error: No estás logueado en la base de datos.');
+      return;
+    }
+    if (!datosViaje) {
+      alert('Primero calcula el viaje.');
       return;
     }
     
@@ -60,10 +131,10 @@ export default function MapScreen({ route, navigation }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usuario_id: user.id,
-          origen_lat: -33.044167,
-          origen_lng: -61.168056,
-          destino_lat: -33.05,
-          destino_lng: -61.17
+          origen_lat: datosViaje.origen.lat,
+          origen_lng: datosViaje.origen.lng,
+          destino_lat: datosViaje.destino.lat,
+          destino_lng: datosViaje.destino.lng
         }),
       });
       
@@ -105,11 +176,46 @@ export default function MapScreen({ route, navigation }) {
       </View>
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.text }]}>¿A dónde vas, {user.nombre}?</Text>
+        {!estadoViaje && (
+          <View style={{ marginBottom: 15 }}>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
+              placeholder="¿Dónde estás? (Ej: Lisandro 1500)"
+              placeholderTextColor="#888"
+              value={origenTexto}
+              onChangeText={setOrigenTexto}
+            />
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
+              placeholder="¿A dónde vas? (Ej: Sarmiento 2000)"
+              placeholderTextColor="#888"
+              value={destinoTexto}
+              onChangeText={setDestinoTexto}
+            />
+            
+            {datosViaje && (
+              <View style={styles.estimateContainer}>
+                <Text style={[styles.estimateText, { color: theme.text }]}>Distancia: {datosViaje.distancia} km</Text>
+                <Text style={[styles.estimatePrice, { color: theme.accent }]}>Costo Est: ${datosViaje.precio}</Text>
+              </View>
+            )}
+            
+            {!datosViaje ? (
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: '#3b82f6', marginBottom: 10 }]} 
+                onPress={calcularViaje}
+                disabled={calculando}
+              >
+                {calculando ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Calcular Costo</Text>}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+
         <TouchableOpacity 
-          style={[styles.button, estadoViaje ? { backgroundColor: '#10b981'} : { backgroundColor: theme.accent }]} 
+          style={[styles.button, estadoViaje ? { backgroundColor: '#10b981'} : (!datosViaje ? {backgroundColor: '#ccc'} : { backgroundColor: theme.accent })]} 
           onPress={pedirTaxi}
-          disabled={solicitando || estadoViaje}
+          disabled={solicitando || estadoViaje || !datosViaje}
         >
           <Text style={styles.buttonText}>
             {solicitando ? 'Buscando...' : estadoViaje ? 'Taxi Solicitado ✓' : 'Pedir Taxi Ahora'}
@@ -199,5 +305,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    marginBottom: 10,
+    fontSize: 15,
+  },
+  estimateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    marginBottom: 10,
+  },
+  estimateText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  estimatePrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
   }
 });
