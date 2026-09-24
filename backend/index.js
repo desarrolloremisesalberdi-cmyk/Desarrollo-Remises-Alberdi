@@ -158,6 +158,31 @@ app.post('/api/viajes/accept', async (req, res) => {
   }
 });
 
+// Empezar un viaje (Chofer llega al pasajero)
+app.post('/api/viajes/start', async (req, res) => {
+  const { viaje_id, chofer_id } = req.body;
+  try {
+    const result = await db.query(
+      "UPDATE viajes SET estado = 'en_viaje' WHERE id = $1 RETURNING *",
+      [viaje_id]
+    );
+    
+    if (result.rows.length === 0) return res.json({ success: false, error: 'Viaje no encontrado' });
+    const viajeActualizado = result.rows[0];
+
+    // Avisarle al pasajero que el viaje comenzó
+    io.emit('ride_started', {
+      viaje_id: viaje_id,
+      pasajero_id: viajeActualizado.usuario_id
+    });
+
+    res.json({ success: true, viaje: viajeActualizado });
+  } catch (error) {
+    console.error('Error al empezar viaje:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
 // Finalizar un viaje (Chofer pasa a Libre)
 app.post('/api/viajes/finish', async (req, res) => {
   const { viaje_id, chofer_id, fin_lat, fin_lng } = req.body;
@@ -209,7 +234,17 @@ app.post('/api/viajes/finish', async (req, res) => {
       [fin_lat, fin_lng, distanciaKm, montoCalculado, comisionAdmin, viaje_id]
     );
 
-    res.json({ success: true, viaje: result.rows[0] });
+    const viajeActualizado = result.rows[0];
+
+    // Avisar al pasajero del costo final
+    io.emit('ride_finished', {
+      viaje_id: viaje_id,
+      pasajero_id: viajeActualizado.usuario_id,
+      monto: montoCalculado,
+      distancia: distanciaKm
+    });
+
+    res.json({ success: true, viaje: viajeActualizado });
   } catch (error) {
     console.error('Error al finalizar viaje:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });

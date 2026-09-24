@@ -6,9 +6,10 @@ const API_URL = 'https://taxis-alberdi-backend.onrender.com';
 const socket = io(API_URL);
 
 export default function MainScreen({ route, navigation }) {
-  const [isOnline, setIsOnline] = useState(true); // Lo ponemos true por defecto para pruebas
+  const [isOnline, setIsOnline] = useState(false); 
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
+  const [location, setLocation] = useState(null);
 
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
@@ -19,25 +20,64 @@ export default function MainScreen({ route, navigation }) {
   useEffect(() => {
     // Escuchar solicitudes de viaje nuevas
     socket.on('new_ride_request', (viaje) => {
-      if (isOnline) {
-        setIncomingRide(viaje);
-      }
-    });
-
-    // Reportar estado y ubicación (simulada) al operador cada vez que cambie isOnline
-    socket.emit('update_location', {
-      chofer_id: chofer.id || 'sim-1',
-      dni: chofer.dni || '31861718',
-      movil: chofer.numero_movil || '14',
-      lat: -33.045, // Ubicación simulada en Casilda
-      lng: -61.168,
-      isOnline: isOnline
+      setIncomingRide(prev => viaje);
     });
 
     return () => {
       socket.off('new_ride_request');
     };
-  }, [isOnline, chofer]);
+  }, []);
+
+  useEffect(() => {
+    let watchId = null;
+
+    if (isOnline || activeTrip) {
+      if ('geolocation' in navigator) {
+        watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setLocation({ latitude, longitude });
+            
+            socket.emit('update_location', {
+              chofer_id: chofer.id || 'sim-1',
+              dni: chofer.dni || '31861718',
+              movil: chofer.numero_movil || '14',
+              lat: latitude,
+              lng: longitude,
+              isOnline: isOnline
+            });
+          },
+          (error) => {
+            console.error('Error obteniendo ubicación', error);
+            alert('Error al obtener ubicación. Asegúrate de dar permisos de GPS a tu navegador.');
+            setIsOnline(false);
+          },
+          { enableHighAccuracy: true, maximumAge: 0 }
+        );
+      } else {
+        alert("Tu navegador no soporta GPS.");
+        setIsOnline(false);
+      }
+    } else {
+      socket.emit('update_location', {
+        chofer_id: chofer.id || 'sim-1',
+        dni: chofer.dni || '31861718',
+        movil: chofer.numero_movil || '14',
+        lat: location ? location.latitude : -33.045,
+        lng: location ? location.longitude : -61.168,
+        isOnline: false
+      });
+      if (watchId !== null && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    }
+
+    return () => {
+      if (watchId !== null && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [isOnline, activeTrip, chofer]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -93,8 +133,30 @@ export default function MainScreen({ route, navigation }) {
     setIncomingRide(null);
   };
 
+  const empezarRecorrido = async () => {
+    if (!activeTrip) return;
+    try {
+      const response = await fetch(`${API_URL}/api/viajes/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: activeTrip.id,
+          chofer_id: chofer.id
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setActiveTrip({ ...activeTrip, estado: 'en_viaje' });
+      } else {
+        alert('Error al empezar el recorrido');
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    }
+  };
+
   const handleToggleStatus = async () => {
-    if (!isOnline && activeTrip) {
+    if (!isOnline && activeTrip && activeTrip.estado === 'en_viaje') {
       // El chofer estaba ocupado y pasa a libre -> Finaliza el viaje
       try {
         const response = await fetch(`${API_URL}/api/viajes/finish`, {
@@ -103,8 +165,8 @@ export default function MainScreen({ route, navigation }) {
           body: JSON.stringify({
             viaje_id: activeTrip.id,
             chofer_id: chofer.id,
-            fin_lat: -33.046, // Ubicación simulada final
-            fin_lng: -61.169
+            fin_lat: location ? location.latitude : -33.046,
+            fin_lng: location ? location.longitude : -61.169
           })
         });
         const data = await response.json();
@@ -158,12 +220,24 @@ export default function MainScreen({ route, navigation }) {
 
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
-        <TouchableOpacity 
-          style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : '#10b981' }]}
-          onPress={handleToggleStatus}
-        >
-          <Text style={styles.buttonText}>{isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)'}</Text>
-        </TouchableOpacity>
+        
+        {activeTrip && activeTrip.estado !== 'en_viaje' ? (
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: '#3b82f6' }]}
+            onPress={empezarRecorrido}
+          >
+            <Text style={styles.buttonText}>Empezar Recorrido</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981') }]}
+            onPress={handleToggleStatus}
+          >
+            <Text style={styles.buttonText}>
+              {activeTrip ? 'Finalizar Viaje' : (isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)')}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

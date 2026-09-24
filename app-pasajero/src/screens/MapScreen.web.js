@@ -12,8 +12,6 @@ export default function MapScreen({ route, navigation }) {
   
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
-  const [calculando, setCalculando] = useState(false);
-  const [datosViaje, setDatosViaje] = useState(null);
 
   // Recibir el usuario desde el Login (si existe)
   const user = route?.params?.user || { id: null, nombre: 'Invitado' };
@@ -36,8 +34,30 @@ export default function MapScreen({ route, navigation }) {
       }
     });
 
+    socket.on('ride_started', (data) => {
+      if (data.pasajero_id === user.id) {
+        setEstadoViaje(`🚘 ¡En viaje! Que disfrutes tu recorrido.`);
+        try {
+          const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+          audio.play();
+        } catch (e) {}
+      }
+    });
+
+    socket.on('ride_finished', (data) => {
+      if (data.pasajero_id === user.id) {
+        setEstadoViaje(`✅ Viaje finalizado.\nDistancia: ${data.distancia.toFixed(2)} km\n\n💰 Total a pagar: $${data.monto}`);
+        try {
+          const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg');
+          audio.play();
+        } catch (e) {}
+      }
+    });
+
     return () => {
       socket.off('ride_accepted');
+      socket.off('ride_started');
+      socket.off('ride_finished');
     };
   }, [user.id]);
 
@@ -81,60 +101,37 @@ export default function MapScreen({ route, navigation }) {
     return null;
   };
 
-  const calcularViaje = async () => {
-    if (!origenTexto || !destinoTexto) {
-      alert('Por favor ingresa origen y destino');
-      return;
-    }
-    setCalculando(true);
-    try {
-      const coordsOrigen = await geocodeAddress(origenTexto);
-      const coordsDestino = await geocodeAddress(destinoTexto);
-      
-      if (!coordsOrigen || !coordsDestino) {
-        alert('No se pudieron encontrar las calles. Intenta ser más específico.');
-        setCalculando(false);
-        return;
-      }
-      
-      const dist = calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng);
-      // Precio mock: $500 bajada + $50 por cada 100 metros ($500 por km)
-      const precio = 500 + (dist * 500);
-      
-      setDatosViaje({
-        origen: coordsOrigen,
-        destino: coordsDestino,
-        distancia: dist.toFixed(2),
-        precio: precio.toFixed(0)
-      });
-    } catch (e) {
-      alert('Error calculando ruta');
-    }
-    setCalculando(false);
-  };
-
   const pedirTaxi = async () => {
     if (!user.id) {
       alert('Error: No estás logueado en la base de datos.');
       return;
     }
-    if (!datosViaje) {
-      alert('Primero calcula el viaje.');
+    if (!origenTexto || !destinoTexto) {
+      alert('Por favor, ingresa tu ubicación actual y tu destino');
       return;
     }
     
     setSolicitando(true);
     
     try {
+      const coordsOrigen = await geocodeAddress(origenTexto);
+      const coordsDestino = await geocodeAddress(destinoTexto);
+      
+      if (!coordsOrigen || !coordsDestino) {
+        alert('No se pudieron encontrar las calles. Intenta ser más específico.');
+        setSolicitando(false);
+        return;
+      }
+
       const response = await fetch(`${API_URL}/api/viajes/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usuario_id: user.id,
-          origen_lat: datosViaje.origen.lat,
-          origen_lng: datosViaje.origen.lng,
-          destino_lat: datosViaje.destino.lat,
-          destino_lng: datosViaje.destino.lng
+          origen_lat: coordsOrigen.lat,
+          origen_lng: coordsOrigen.lng,
+          destino_lat: coordsDestino.lat,
+          destino_lng: coordsDestino.lng
         }),
       });
       
@@ -192,35 +189,33 @@ export default function MapScreen({ route, navigation }) {
               value={destinoTexto}
               onChangeText={setDestinoTexto}
             />
-            
-            {datosViaje && (
-              <View style={styles.estimateContainer}>
-                <Text style={[styles.estimateText, { color: theme.text }]}>Distancia: {datosViaje.distancia} km</Text>
-                <Text style={[styles.estimatePrice, { color: theme.accent }]}>Costo Est: ${datosViaje.precio}</Text>
-              </View>
-            )}
-            
-            {!datosViaje ? (
-              <TouchableOpacity 
-                style={[styles.button, { backgroundColor: '#3b82f6', marginBottom: 10 }]} 
-                onPress={calcularViaje}
-                disabled={calculando}
-              >
-                {calculando ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Calcular Costo</Text>}
-              </TouchableOpacity>
-            ) : null}
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: theme.accent, marginTop: 10 }]} 
+              onPress={pedirTaxi}
+              disabled={solicitando}
+            >
+              {solicitando ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Pedir Taxi Ahora</Text>}
+            </TouchableOpacity>
           </View>
         )}
 
-        <TouchableOpacity 
-          style={[styles.button, estadoViaje ? { backgroundColor: '#10b981'} : (!datosViaje ? {backgroundColor: '#ccc'} : { backgroundColor: theme.accent })]} 
-          onPress={pedirTaxi}
-          disabled={solicitando || estadoViaje || !datosViaje}
-        >
-          <Text style={styles.buttonText}>
-            {solicitando ? 'Buscando...' : estadoViaje ? 'Taxi Solicitado ✓' : 'Pedir Taxi Ahora'}
-          </Text>
-        </TouchableOpacity>
+        {estadoViaje && (
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: estadoViaje.includes('finalizado') ? '#3b82f6' : '#10b981'}]} 
+            onPress={() => {
+              if (estadoViaje.includes('finalizado')) {
+                setEstadoViaje(null);
+                setChoferAsignado(null);
+                setOrigenTexto('');
+                setDestinoTexto('');
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>
+              {estadoViaje.includes('finalizado') ? 'Pedir otro viaje' : 'Taxi Solicitado ✓'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
