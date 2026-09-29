@@ -4,7 +4,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { io } from 'socket.io-client';
 
-const API_URL = 'https://taxis-alberdi-backend.onrender.com';
+const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
 export default function MapScreen({ route, navigation }) {

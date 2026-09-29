@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, TextInput, Ac
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { io } from 'socket.io-client';
 
-const API_URL = 'https://taxis-alberdi-backend.onrender.com';
+const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
 export default function MapScreen({ route, navigation }) {
@@ -175,8 +175,8 @@ export default function MapScreen({ route, navigation }) {
                   components: 'country:ar',
                 }}
                 requestUrl={{
-                  url: 'https://taxis-alberdi-backend.onrender.com/api/maps',
-                  useOnWeb: true,
+                  url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps',
+                  useOnPlatform: 'web',
                 }}
                 styles={googlePlacesStyles}
               />
@@ -195,8 +195,8 @@ export default function MapScreen({ route, navigation }) {
                   components: 'country:ar',
                 }}
                 requestUrl={{
-                  url: 'https://taxis-alberdi-backend.onrender.com/api/maps',
-                  useOnWeb: true,
+                  url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps',
+                  useOnPlatform: 'web',
                 }}
                 styles={googlePlacesStyles}
               />

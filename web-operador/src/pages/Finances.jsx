@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Calendar, CreditCard, Banknote } from 'lucide-react';
 
-const API_URL = 'https://taxis-alberdi-backend.onrender.com';
+const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function Finances() {
   const [filter, setFilter] = useState('hoy');
