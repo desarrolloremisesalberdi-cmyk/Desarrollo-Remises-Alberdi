@@ -1,16 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Switch } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function LoginScreen({ navigation }) {
   const [dni, setDni] = useState('');
   const [clave, setClave] = useState('');
+  const [recordar, setRecordar] = useState(false);
 
   const isDarkMode = useColorScheme() === 'dark';
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
+    const loadCredentials = async () => {
+      try {
+        const savedDni = await AsyncStorage.getItem('chofer_dni');
+        const savedClave = await AsyncStorage.getItem('chofer_clave');
+        if (savedDni && savedClave) {
+          setDni(savedDni);
+          setClave(savedClave);
+          setRecordar(true);
+        }
+      } catch (e) {
+        // Ignorar
+      }
+    };
+    loadCredentials();
+
     if (Platform.OS === 'web') {
       const savedChofer = localStorage.getItem('chofer_user');
       if (savedChofer) {
@@ -34,6 +51,14 @@ export default function LoginScreen({ navigation }) {
       const data = await response.json();
       
       if (data.success) {
+        if (recordar) {
+          await AsyncStorage.setItem('chofer_dni', dni);
+          await AsyncStorage.setItem('chofer_clave', clave);
+        } else {
+          await AsyncStorage.removeItem('chofer_dni');
+          await AsyncStorage.removeItem('chofer_clave');
+        }
+
         if (Platform.OS === 'web') {
           localStorage.setItem('chofer_user', JSON.stringify(data.chofer));
         }
@@ -68,6 +93,16 @@ export default function LoginScreen({ navigation }) {
         onChangeText={setClave}
       />
       
+      <View style={styles.switchContainer}>
+        <Text style={[styles.switchLabel, { color: theme.text }]}>Recordar usuario</Text>
+        <Switch
+          value={recordar}
+          onValueChange={setRecordar}
+          trackColor={{ false: '#767577', true: theme.accent }}
+          thumbColor={recordar ? '#fff' : '#f4f3f4'}
+        />
+      </View>
+
       <TouchableOpacity 
         style={[styles.button, { backgroundColor: theme.accent }]}
         onPress={handleLogin}
@@ -139,5 +174,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
+  switchLabel: {
+    fontSize: 15,
+    fontWeight: '500',
   }
 });
