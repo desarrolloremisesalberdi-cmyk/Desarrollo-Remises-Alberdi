@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert } from 'react-native';
-import MapView, { UrlTile, Marker } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
 
@@ -216,13 +216,7 @@ export default function MainScreen({ route, navigation }) {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         } : undefined}
-        mapType="none"
       >
-        <UrlTile
-          urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-          flipY={false}
-        />
         {location && (
           <Marker
             coordinate={{ latitude: location.latitude, longitude: location.longitude }}

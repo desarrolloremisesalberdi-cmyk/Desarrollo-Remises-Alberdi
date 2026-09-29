@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, TextInput, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, TextInput, ActivityIndicator } from 'react-native-web';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { io } from 'socket.io-client';
 
 const API_URL = 'https://taxis-alberdi-backend.onrender.com';
@@ -90,38 +91,23 @@ export default function MapScreen({ route, navigation }) {
     return R * c;
   };
 
-  const geocodeAddress = async (address) => {
-    // Agregamos Casilda por defecto para mayor precisión
-    const query = encodeURIComponent(`${address}, Casilda, Santa Fe, Argentina`);
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
-    const data = await res.json();
-    if (data && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    }
-    return null;
-  };
+  // Google Places Autocomplete handle
+  const [coordsOrigen, setCoordsOrigen] = useState(null);
+  const [coordsDestino, setCoordsDestino] = useState(null);
 
   const pedirTaxi = async () => {
     if (!user.id) {
       alert('Error: No estás logueado en la base de datos.');
       return;
     }
-    if (!origenTexto || !destinoTexto) {
-      alert('Por favor, ingresa tu ubicación actual y tu destino');
+    if (!coordsOrigen || !coordsDestino) {
+      alert('Por favor, busca y selecciona tu origen y destino en la lista');
       return;
     }
     
     setSolicitando(true);
     
     try {
-      const coordsOrigen = await geocodeAddress(origenTexto);
-      const coordsDestino = await geocodeAddress(destinoTexto);
-      
-      if (!coordsOrigen || !coordsDestino) {
-        alert('No se pudieron encontrar las calles. Intenta ser más específico.');
-        setSolicitando(false);
-        return;
-      }
 
       const response = await fetch(`${API_URL}/api/viajes/request`, {
         method: 'POST',
@@ -155,7 +141,7 @@ export default function MapScreen({ route, navigation }) {
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
         <iframe 
           title="Mapa de Casilda"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=-61.19,-33.06,-61.14,-33.02&layer=mapnik"
+          src={`https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=-33.044167,-61.168056&zoom=14&maptype=roadmap`}
           style={{ width: '100%', height: '100%', border: 0 }}
         />
         {estadoViaje && (
@@ -174,21 +160,39 @@ export default function MapScreen({ route, navigation }) {
       
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
         {!estadoViaje && (
-          <View style={{ marginBottom: 15 }}>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
-              placeholder="¿Dónde estás? (Ej: Lisandro 1500)"
-              placeholderTextColor="#888"
-              value={origenTexto}
-              onChangeText={setOrigenTexto}
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.bg, color: theme.text, borderColor: theme.border }]}
-              placeholder="¿A dónde vas? (Ej: Sarmiento 2000)"
-              placeholderTextColor="#888"
-              value={destinoTexto}
-              onChangeText={setDestinoTexto}
-            />
+          <View style={{ marginBottom: 15, zIndex: 10 }}>
+            <View style={{ zIndex: 20, marginBottom: 10 }}>
+              <GooglePlacesAutocomplete
+                placeholder="¿Dónde estás?"
+                fetchDetails={true}
+                onPress={(data, details = null) => {
+                  setOrigenTexto(data.description);
+                  setCoordsOrigen({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
+                }}
+                query={{
+                  key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                  language: 'es',
+                  components: 'country:ar',
+                }}
+                styles={googlePlacesStyles}
+              />
+            </View>
+            <View style={{ zIndex: 10, marginBottom: 10 }}>
+              <GooglePlacesAutocomplete
+                placeholder="¿A dónde vas?"
+                fetchDetails={true}
+                onPress={(data, details = null) => {
+                  setDestinoTexto(data.description);
+                  setCoordsDestino({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
+                }}
+                query={{
+                  key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                  language: 'es',
+                  components: 'country:ar',
+                }}
+                styles={googlePlacesStyles}
+              />
+            </View>
             <TouchableOpacity 
               style={[styles.button, { backgroundColor: theme.accent, marginTop: 10 }]} 
               onPress={pedirTaxi}
@@ -235,6 +239,66 @@ const lightTheme = {
   border: 'rgba(0, 0, 0, 0.1)',
   text: '#0f172a',
   accent: '#10b981',
+};
+
+const googlePlacesStyles = {
+  textInputContainer: {
+    backgroundColor: 'rgba(0,0,0,0)',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+  },
+  textInput: {
+    marginLeft: 0,
+    marginRight: 0,
+    height: 48,
+    color: '#000',
+    fontSize: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    paddingHorizontal: 15,
+  },
+  predefinedPlacesDescription: {
+    color: '#1faadb',
+  },
+  listView: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginTop: 5,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    elevation: 3,
+  },
+};
+
+const googlePlacesStyles = {
+  textInputContainer: {
+    backgroundColor: 'rgba(0,0,0,0)',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+  },
+  textInput: {
+    marginLeft: 0,
+    marginRight: 0,
+    height: 48,
+    color: '#000',
+    fontSize: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    paddingHorizontal: 15,
+  },
+  predefinedPlacesDescription: {
+    color: '#1faadb',
+  },
+  listView: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginTop: 5,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    elevation: 3,
+  },
 };
 
 const styles = StyleSheet.create({

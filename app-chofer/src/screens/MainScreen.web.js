@@ -186,7 +186,7 @@ export default function MainScreen({ route, navigation }) {
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
         <iframe 
           title="Mapa de Casilda"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=-61.19,-33.06,-61.14,-33.02&layer=mapnik"
+          src={`https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=-33.044167,-61.168056&zoom=14&maptype=roadmap`}
           style={{ width: '100%', height: '100%', border: 0 }}
         />
       </View>
