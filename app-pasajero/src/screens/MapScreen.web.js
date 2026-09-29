@@ -271,36 +271,6 @@ const googlePlacesStyles = {
   },
 };
 
-const googlePlacesStyles = {
-  textInputContainer: {
-    backgroundColor: 'rgba(0,0,0,0)',
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
-  },
-  textInput: {
-    marginLeft: 0,
-    marginRight: 0,
-    height: 48,
-    color: '#000',
-    fontSize: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    paddingHorizontal: 15,
-  },
-  predefinedPlacesDescription: {
-    color: '#1faadb',
-  },
-  listView: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginTop: 5,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    elevation: 3,
-  },
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
