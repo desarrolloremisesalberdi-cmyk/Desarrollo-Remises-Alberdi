@@ -9,9 +9,14 @@ const nodemailer = require('nodemailer');
 const { createClient } = require('@supabase/supabase-js');
 
 // Configuración de Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+let supabase = null;
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+} else {
+  console.warn("⚠️ SUPABASE_URL o SUPABASE_ANON_KEY no están definidos. La subida de imágenes fallará.");
+}
 
 // Configuración de Correo
 const transporter = nodemailer.createTransport({
@@ -101,6 +106,10 @@ app.post('/api/users/register', async (req, res) => {
     // 3. Subir foto a Supabase Storage (si existe)
     let dni_foto_url = null;
     if (foto_base64) {
+      if (!supabase) {
+        return res.status(500).json({ success: false, error: 'Faltan variables de entorno SUPABASE_URL o SUPABASE_ANON_KEY en el servidor para procesar la imagen.' });
+      }
+
       try {
         const base64Data = foto_base64.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
