@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme } from 'react-native';
 
-const API_URL = 'https://taxis-alberdi-backend.onrender.com';
+const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function LoginScreen({ navigation }) {
   const [dni, setDni] = useState('');

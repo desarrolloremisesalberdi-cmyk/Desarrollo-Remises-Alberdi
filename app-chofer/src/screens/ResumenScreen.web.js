@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, useColorScheme } from 'react-native';
 
-const API_URL = 'https://taxis-alberdi-backend.onrender.com';
+const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function ResumenScreen({ route, navigation }) {
   const chofer = route?.params?.chofer || { id: null };

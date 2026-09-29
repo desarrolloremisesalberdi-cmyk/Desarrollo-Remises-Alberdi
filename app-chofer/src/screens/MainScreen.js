@@ -4,7 +4,7 @@ import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'https://taxis-alberdi-backend.onrender.com';
+const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function MainScreen({ route, navigation }) {
   const [isOnline, setIsOnline] = useState(false);
