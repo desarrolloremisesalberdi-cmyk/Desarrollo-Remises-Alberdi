@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, useColorScheme, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, useColorScheme } from 'react-native';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com'; 
 
 export default function LoginScreen({ navigation }) {
-  const [nombre, setNombre] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [esJubilado, setEsJubilado] = useState(false);
+  const [identificador, setIdentificador] = useState('');
+  const [clave, setClave] = useState('');
   const [loading, setLoading] = useState(false);
   const isDarkMode = useColorScheme() === 'dark';
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -21,17 +20,17 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   const handleLogin = async () => {
-    if (!nombre || !telefono) {
-      alert('Por favor ingresá tu nombre y teléfono');
+    if (!identificador || !clave) {
+      alert('Por favor ingresá tu DNI/Email y contraseña');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/users/register`, {
+      const response = await fetch(`${API_URL}/api/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, apellido: '', telefono, es_jubilado: esJubilado }),
+        body: JSON.stringify({ dni_o_email: identificador, clave }),
       });
 
       const data = await response.json();
@@ -42,7 +41,7 @@ export default function LoginScreen({ navigation }) {
         }
         navigation.replace('Map', { user: data.user });
       } else {
-        alert('No se pudo iniciar sesión');
+        alert(data.error || 'No se pudo iniciar sesión');
       }
     } catch (error) {
       alert('Hubo un problema de conexión con el servidor.');
@@ -57,29 +56,20 @@ export default function LoginScreen({ navigation }) {
       
       <TextInput 
         style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]}
-        placeholder="Nombre y Apellido"
+        placeholder="DNI o Correo Electrónico"
         placeholderTextColor={theme.placeholder}
-        value={nombre}
-        onChangeText={setNombre}
+        value={identificador}
+        onChangeText={setIdentificador}
+        autoCapitalize="none"
       />
       <TextInput 
         style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]}
-        placeholder="Teléfono"
+        placeholder="Contraseña"
         placeholderTextColor={theme.placeholder}
-        keyboardType="phone-pad"
-        value={telefono}
-        onChangeText={setTelefono}
+        secureTextEntry
+        value={clave}
+        onChangeText={setClave}
       />
-
-      <View style={styles.switchContainer}>
-        <Text style={[styles.switchLabel, { color: theme.text }]}>¿Sos Jubilado / Pensionado?</Text>
-        <Switch
-          value={esJubilado}
-          onValueChange={setEsJubilado}
-          trackColor={{ false: '#767577', true: theme.accent }}
-          thumbColor={esJubilado ? '#fff' : '#f4f3f4'}
-        />
-      </View>
       
       <TouchableOpacity 
         style={[styles.button, { backgroundColor: theme.accent }]}
@@ -92,6 +82,18 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.buttonText}>Ingresar</Text>
         )}
       </TouchableOpacity>
+
+      <View style={styles.linksContainer}>
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+          <Text style={[styles.linkText, { color: theme.accent }]}>¿Olvidaste tu contraseña?</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={() => navigation.navigate('Register')} style={{ marginTop: 15 }}>
+          <Text style={[styles.linkText, { color: theme.text }]}>
+            ¿No tienes cuenta? <Text style={{ color: theme.accent, fontWeight: '700' }}>Regístrate aquí</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -102,7 +104,7 @@ const darkTheme = {
   border: 'rgba(255, 255, 255, 0.1)',
   text: '#f8fafc',
   placeholder: '#94a3b8',
-  accent: '#10b981', // Verde Esmeralda (Cliente)
+  accent: '#10b981', 
 };
 
 const lightTheme = {
@@ -152,15 +154,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  switchContainer: {
-    flexDirection: 'row',
+  linksContainer: {
+    marginTop: 30,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 25,
-    paddingHorizontal: 10,
   },
-  switchLabel: {
-    fontSize: 16,
-    fontWeight: '600',
+  linkText: {
+    fontSize: 15,
   }
 });

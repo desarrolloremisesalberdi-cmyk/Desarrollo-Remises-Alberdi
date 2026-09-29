@@ -4,6 +4,23 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./config/db'); // Esto inicia la conexión a DB
+const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
+const { createClient } = require('@supabase/supabase-js');
+
+// Configuración de Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Configuración de Correo
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER || 'desarrolloremisesalberdi@gmail.com',
+    pass: process.env.EMAIL_PASS || 'tu_contraseña_de_aplicacion'
+  }
+});
 
 // Utils
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -40,7 +57,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 const io = new Server(server, {
   cors: {
@@ -67,28 +84,140 @@ app.use('/api/maps', async (req, res) => {
   }
 });
 
-// Registrar o iniciar sesión de Pasajero
+// Registro de Pasajero
 app.post('/api/users/register', async (req, res) => {
-  const { nombre, apellido, telefono, es_jubilado } = req.body;
+  const { nombre, apellido, dni, telefono, email, clave, foto_base64 } = req.body;
   try {
-    // Buscar si el usuario ya existe por su teléfono
-    const existingUser = await db.query('SELECT * FROM usuarios WHERE telefono = $1', [telefono]);
-    if (existingUser.rows.length > 0) {
-      // Si ya existe, actualizamos su estado de jubilado por si cambió
-      await db.query('UPDATE usuarios SET es_jubilado = $1 WHERE telefono = $2', [es_jubilado || false, telefono]);
-      existingUser.rows[0].es_jubilado = es_jubilado || false;
-      return res.json({ success: true, user: existingUser.rows[0], message: 'Sesión iniciada' });
+    // 1. Verificar si ya existe el DNI o Email
+    const existing = await db.query('SELECT id FROM usuarios WHERE dni = $1 OR email = $2', [dni, email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'El DNI o Email ya están registrados.' });
     }
-    
-    // Si no existe, lo creamos
+
+    // 2. Hashear la contraseña
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(clave, saltRounds);
+
+    // 3. Subir foto a Supabase Storage (si existe)
+    let dni_foto_url = null;
+    if (foto_base64) {
+      try {
+        const base64Data = foto_base64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const fileName = `dni_${dni}_${Date.now()}.jpg`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('dnis')
+          .upload(fileName, buffer, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('dnis')
+          .getPublicUrl(fileName);
+        
+        dni_foto_url = publicUrlData.publicUrl;
+      } catch (uploadErr) {
+        console.error('Error al subir imagen de DNI:', uploadErr);
+        // Podemos decidir fallar o continuar sin foto. Para este caso fallamos.
+        return res.status(400).json({ success: false, error: 'Error al procesar la foto del DNI.' });
+      }
+    }
+
+    // 4. Guardar en Base de Datos
     const newUser = await db.query(
-      'INSERT INTO usuarios (nombre, apellido, telefono, es_jubilado) VALUES ($1, $2, $3, $4) RETURNING *',
-      [nombre, apellido || '', telefono, es_jubilado || false]
+      'INSERT INTO usuarios (nombre, apellido, dni, telefono, email, clave, dni_foto_url) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [nombre, apellido, dni, telefono, email, hashedPassword, dni_foto_url]
     );
-    res.json({ success: true, user: newUser.rows[0], message: 'Usuario registrado' });
+
+    // No devolver el hash en la respuesta
+    const user = newUser.rows[0];
+    delete user.clave;
+
+    res.json({ success: true, user, message: 'Usuario registrado exitosamente.' });
   } catch (error) {
     console.error('Error al registrar usuario:', error);
-    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    res.status(500).json({ success: false, error: 'Error interno del servidor.' });
+  }
+});
+
+// Login de Pasajero
+app.post('/api/users/login', async (req, res) => {
+  const { dni_o_email, clave } = req.body;
+  try {
+    const result = await db.query('SELECT * FROM usuarios WHERE dni = $1 OR email = $1', [dni_o_email]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ success: false, error: 'Credenciales incorrectas.' });
+    }
+
+    const user = result.rows[0];
+    if (!user.clave) {
+      return res.status(401).json({ success: false, error: 'La cuenta no tiene contraseña configurada. Por favor recupérela.' });
+    }
+
+    const match = await bcrypt.compare(clave, user.clave);
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'Credenciales incorrectas.' });
+    }
+
+    delete user.clave;
+    delete user.reset_token;
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor.' });
+  }
+});
+
+// Recuperar contraseña (Generar Token y enviar correo)
+app.post('/api/users/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  try {
+    const result = await db.query('SELECT id, nombre FROM usuarios WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'No existe usuario con ese correo.' });
+    }
+
+    const user = result.rows[0];
+    // Generar un token aleatorio de 6 dígitos
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    await db.query('UPDATE usuarios SET reset_token = $1 WHERE email = $2', [resetToken, email]);
+
+    const mailOptions = {
+      from: transporter.options.auth.user,
+      to: email,
+      subject: 'Recuperación de Contraseña - Remises Alberdi',
+      text: `Hola ${user.nombre}, tu código para restablecer la contraseña es: ${resetToken}. Ingrésalo en la aplicación para cambiar tu clave.`
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true, message: 'Correo enviado.' });
+  } catch (error) {
+    console.error('Error enviando correo:', error);
+    res.status(500).json({ success: false, error: 'Error al enviar el correo.' });
+  }
+});
+
+// Restablecer contraseña con Token
+app.post('/api/users/reset-password', async (req, res) => {
+  const { email, token, nueva_clave } = req.body;
+  try {
+    const result = await db.query('SELECT id FROM usuarios WHERE email = $1 AND reset_token = $2', [email, token]);
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Código incorrecto o vencido.' });
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(nueva_clave, saltRounds);
+    
+    await db.query('UPDATE usuarios SET clave = $1, reset_token = NULL WHERE email = $2', [hashedPassword, email]);
+    res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
+  } catch (error) {
+    console.error('Error restableciendo clave:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor.' });
   }
 });
 
