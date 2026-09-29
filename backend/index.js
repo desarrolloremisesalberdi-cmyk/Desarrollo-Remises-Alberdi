@@ -240,6 +240,14 @@ app.post('/api/viajes/request', async (req, res) => {
     );
     const viaje = newViaje.rows[0];
     
+    // Obtener información del usuario para saber si es jubilado
+    const user = await db.query('SELECT es_jubilado, nombre, apellido, dni FROM usuarios WHERE id = $1', [usuario_id]);
+    if (user.rows.length > 0) {
+      viaje.es_jubilado = user.rows[0].es_jubilado;
+      viaje.pasajero_nombre = `${user.rows[0].nombre} ${user.rows[0].apellido}`;
+      viaje.pasajero_dni = user.rows[0].dni;
+    }
+    
     // Emitir a todos los choferes conectados que hay un nuevo viaje
     io.emit('new_ride_request', viaje);
     

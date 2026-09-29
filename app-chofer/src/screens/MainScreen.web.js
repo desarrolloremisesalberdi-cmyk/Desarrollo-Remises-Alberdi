@@ -10,6 +10,7 @@ export default function MainScreen({ route, navigation }) {
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
   const [location, setLocation] = useState(null);
+  const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
 
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
@@ -119,6 +120,7 @@ export default function MainScreen({ route, navigation }) {
       if (data.success) {
         alert('¡Viaje Aceptado! Dirígete al punto de partida.');
         setActiveTrip(data.viaje);
+        setConfirmadoJubilado(false);
         setIsOnline(false); // Automáticamente pasa a ocupado
       } else {
         alert('Error al aceptar el viaje: ' + data.error);
@@ -197,9 +199,18 @@ export default function MainScreen({ route, navigation }) {
           <View style={[styles.notificationCard, { backgroundColor: theme.cardBg, borderColor: theme.accent }]}>
             <Text style={[styles.notificationTitle, { color: theme.accent }]}>🚕 ¡NUEVO VIAJE!</Text>
             <Text style={[styles.notificationText, { color: theme.text }]}>ID Viaje: #{incomingRide.id || 'N/A'}</Text>
+            {incomingRide.pasajero_nombre && (
+              <Text style={[styles.notificationText, { color: theme.text, fontWeight: 'bold' }]}>Pasajero: {incomingRide.pasajero_nombre}</Text>
+            )}
             <Text style={[styles.notificationText, { color: theme.text }]}>
               Se requiere un móvil en las coordenadas: {incomingRide.origen_lat}, {incomingRide.origen_lng}
             </Text>
+            {incomingRide.es_jubilado && (
+              <View style={{ backgroundColor: '#10b981', padding: 8, borderRadius: 8, marginVertical: 10, alignItems: 'center' }}>
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>¡ATENCIÓN: PASAJERO JUBILADO!</Text>
+                <Text style={{ color: 'white', fontSize: 13, textAlign: 'center', marginTop: 3 }}>Aplica Tarifa con Descuento</Text>
+              </View>
+            )}
             
             <View style={styles.notificationActions}>
               <TouchableOpacity style={[styles.btnAction, {backgroundColor: '#ef4444'}]} onPress={rechazarViaje}>
@@ -222,12 +233,28 @@ export default function MainScreen({ route, navigation }) {
         <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
         
         {activeTrip && activeTrip.estado !== 'en_viaje' ? (
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: '#3b82f6' }]}
-            onPress={empezarRecorrido}
-          >
-            <Text style={styles.buttonText}>Empezar Recorrido</Text>
-          </TouchableOpacity>
+          <>
+            {activeTrip.es_jubilado && (
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 15, borderRadius: 10, marginBottom: 15, borderColor: '#10b981', borderWidth: 1 }}>
+                <Text style={{ color: '#10b981', fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>Este viaje aplica Tarifa Jubilado</Text>
+                <TouchableOpacity 
+                  style={[styles.button, { backgroundColor: confirmadoJubilado ? '#10b981' : 'transparent', borderWidth: 2, borderColor: '#10b981', marginTop: 0 }]}
+                  onPress={() => setConfirmadoJubilado(!confirmadoJubilado)}
+                >
+                  <Text style={[styles.buttonText, { color: confirmadoJubilado ? 'white' : '#10b981' }]}>
+                    {confirmadoJubilado ? '✓ Identidad Confirmada' : 'Tocar para Confirmar DNI'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: (activeTrip.es_jubilado && !confirmadoJubilado) ? '#94a3b8' : '#3b82f6' }]}
+              onPress={empezarRecorrido}
+              disabled={activeTrip.es_jubilado && !confirmadoJubilado}
+            >
+              <Text style={styles.buttonText}>Empezar Recorrido</Text>
+            </TouchableOpacity>
+          </>
         ) : (
           <TouchableOpacity 
             style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981') }]}
