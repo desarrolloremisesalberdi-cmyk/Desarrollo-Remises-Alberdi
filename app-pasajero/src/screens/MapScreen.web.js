@@ -174,6 +174,10 @@ export default function MapScreen({ route, navigation }) {
                   language: 'es',
                   components: 'country:ar',
                 }}
+                requestUrl={{
+                  url: 'https://taxis-alberdi-backend.onrender.com/api/maps',
+                  useOnWeb: true,
+                }}
                 styles={googlePlacesStyles}
               />
             </View>
@@ -189,6 +193,10 @@ export default function MapScreen({ route, navigation }) {
                   key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
                   language: 'es',
                   components: 'country:ar',
+                }}
+                requestUrl={{
+                  url: 'https://taxis-alberdi-backend.onrender.com/api/maps',
+                  useOnWeb: true,
                 }}
                 styles={googlePlacesStyles}
               />

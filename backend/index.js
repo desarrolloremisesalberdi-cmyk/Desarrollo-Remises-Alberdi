@@ -55,6 +55,18 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../index.html'));
 });
 
+// Proxy de Google Maps para evitar CORS en Web
+app.get('/api/maps/*', async (req, res) => {
+  const targetUrl = `https://maps.googleapis.com/maps/api${req.url.replace('/api/maps', '')}`;
+  try {
+    const response = await fetch(targetUrl);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Registrar o iniciar sesión de Pasajero
 app.post('/api/users/register', async (req, res) => {
   const { nombre, apellido, telefono, es_jubilado } = req.body;
