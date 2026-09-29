@@ -56,8 +56,8 @@ app.get('/', (req, res) => {
 });
 
 // Proxy de Google Maps para evitar CORS en Web
-app.get('/api/maps/*', async (req, res) => {
-  const targetUrl = `https://maps.googleapis.com/maps/api${req.url.replace('/api/maps', '')}`;
+app.use('/api/maps', async (req, res) => {
+  const targetUrl = `https://maps.googleapis.com/maps/api${req.url}`;
   try {
     const response = await fetch(targetUrl);
     const data = await response.json();
