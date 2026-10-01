@@ -87,6 +87,7 @@ export default function MainScreen({ route, navigation }) {
                 isOnline: isOnline,
                 lat: latitude,
                 lng: longitude,
+                foto_url: chofer.foto_url || null
               });
             }
           }
@@ -102,6 +103,7 @@ export default function MainScreen({ route, navigation }) {
             isOnline: false,
             lat: location ? location.latitude : -33.044167,
             lng: location ? location.longitude : -61.168056,
+            foto_url: chofer.foto_url || null
           });
         }
       }

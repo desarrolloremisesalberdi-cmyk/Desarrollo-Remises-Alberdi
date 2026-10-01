@@ -45,7 +45,8 @@ export default function MainScreen({ route, navigation }) {
               movil: chofer.numero_movil || '14',
               lat: latitude,
               lng: longitude,
-              isOnline: isOnline
+              isOnline: isOnline,
+              foto_url: chofer.foto_url || null
             });
           },
           (error) => {

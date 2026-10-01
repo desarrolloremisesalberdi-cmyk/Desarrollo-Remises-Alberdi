@@ -276,25 +276,12 @@ app.post('/api/choferes/register', async (req, res) => {
     const saltRounds = 10;
     const defaultPassword = await bcrypt.hash(clave || '123456', saltRounds);
 
-    let fotoPerfilUrl = null, fotoCarnetUrl = null, fotoDniUrl = null, fotoAutoUrl = null;
-
-    const uploadImage = async (base64String, folder) => {
-      if (!base64String) return null;
-      const base64Data = base64String.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(base64Data, 'base64');
-      const filename = `${folder}/${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
-      const { data, error } = await supabase.storage.from('dni-fotos').upload(filename, buffer, { contentType: 'image/jpeg' });
-      if (error) {
-        console.error("Error subiendo imagen:", error);
-        return null;
-      }
-      return supabase.storage.from('dni-fotos').getPublicUrl(filename).data.publicUrl;
-    };
-
-    fotoPerfilUrl = await uploadImage(foto_perfil_base64, 'perfiles_chofer');
-    fotoCarnetUrl = await uploadImage(foto_carnet_base64, 'carnets_chofer');
-    fotoDniUrl = await uploadImage(foto_dni_base64, 'dnis_chofer');
-    fotoAutoUrl = await uploadImage(foto_auto_base64, 'autos_chofer');
+    // Guardar las imágenes directamente como Base64 en la base de datos
+    // Esto evita requerir configuración adicional de Storage y funciona con src={foto_url}
+    fotoPerfilUrl = foto_perfil_base64 || null;
+    fotoCarnetUrl = foto_carnet_base64 || null;
+    fotoDniUrl = foto_dni_base64 || null;
+    fotoAutoUrl = foto_auto_base64 || null;
 
     const result = await db.query(
       `INSERT INTO choferes 
@@ -315,7 +302,7 @@ app.post('/api/choferes/login', async (req, res) => {
   const { dni, clave } = req.body;
   try {
     const result = await db.query(
-      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado FROM choferes WHERE dni = $1',
+      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado, foto_url FROM choferes WHERE dni = $1',
       [dni]
     );
     
