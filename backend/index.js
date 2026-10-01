@@ -264,7 +264,7 @@ app.post('/api/choferes/register', async (req, res) => {
     nombre, apellido, email, telefono, domicilio, dni, 
     fecha_nacimiento, numero_movil, vehiculo_modelo, 
     vehiculo_color, vehiculo_patente, datos_cobro, 
-    foto_perfil_base64, foto_carnet_base64, foto_dni_base64, foto_auto_base64 
+    foto_perfil_base64, foto_carnet_base64, foto_dni_base64, foto_auto_base64, clave 
   } = req.body;
   
   try {
@@ -274,7 +274,7 @@ app.post('/api/choferes/register', async (req, res) => {
     }
 
     const saltRounds = 10;
-    const defaultPassword = await bcrypt.hash('123456', saltRounds);
+    const defaultPassword = await bcrypt.hash(clave || '123456', saltRounds);
 
     let fotoPerfilUrl = null, fotoCarnetUrl = null, fotoDniUrl = null, fotoAutoUrl = null;
 

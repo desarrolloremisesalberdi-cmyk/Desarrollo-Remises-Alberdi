@@ -74,7 +74,7 @@ function DashboardMap() {
             url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
             attribution='&copy; <a href="https://www.google.com/intl/en-US_US/help/terms_maps.html">Google Maps</a>'
           />
-          {driversList.filter(d => d.lat != null && d.lng != null).map(driver => {
+          {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng))).map(driver => {
             const borderColor = driver.isOnline ? '#10b981' : '#ef4444';
             const imageUrl = driver.foto_url || 'https://via.placeholder.com/150';
             const iconHtml = `

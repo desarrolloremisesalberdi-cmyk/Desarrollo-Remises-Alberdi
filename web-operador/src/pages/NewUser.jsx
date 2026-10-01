@@ -21,7 +21,9 @@ export default function NewUser() {
     foto_perfil_base64: '',
     foto_carnet_base64: '',
     foto_dni_base64: '',
-    foto_auto_base64: ''
+    foto_auto_base64: '',
+    clave: '',
+    clave_repetir: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -42,6 +44,10 @@ export default function NewUser() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.clave !== formData.clave_repetir) {
+      alert('Las contraseñas no coinciden.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/register', {
@@ -98,6 +104,14 @@ export default function NewUser() {
               <div className="form-group">
                 <label>DNI</label>
                 <input type="text" name="dni" value={formData.dni} onChange={handleChange} required />
+              </div>
+              <div className="form-group">
+                <label>Contraseña</label>
+                <input type="password" name="clave" value={formData.clave} onChange={handleChange} required />
+              </div>
+              <div className="form-group">
+                <label>Repetir Contraseña</label>
+                <input type="password" name="clave_repetir" value={formData.clave_repetir} onChange={handleChange} required />
               </div>
               <div className="form-group">
                 <label>Fecha de Nacimiento</label>
