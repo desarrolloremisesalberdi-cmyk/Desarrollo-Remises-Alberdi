@@ -315,12 +315,20 @@ app.post('/api/choferes/login', async (req, res) => {
   const { dni, clave } = req.body;
   try {
     const result = await db.query(
-      'SELECT id, nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, estado FROM choferes WHERE dni = $1 AND clave = $2',
-      [dni, clave]
+      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado FROM choferes WHERE dni = $1',
+      [dni]
     );
     
     if (result.rows.length > 0) {
-      res.json({ success: true, chofer: result.rows[0] });
+      const chofer = result.rows[0];
+      const match = await bcrypt.compare(clave, chofer.clave);
+      if (match) {
+        // Eliminar la clave antes de enviarlo al cliente
+        delete chofer.clave;
+        res.json({ success: true, chofer });
+      } else {
+        res.json({ success: false, error: 'Credenciales incorrectas' });
+      }
     } else {
       res.json({ success: false, error: 'Credenciales incorrectas' });
     }
