@@ -76,7 +76,7 @@ function DashboardMap() {
           />
           {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng))).map(driver => {
             const borderColor = driver.isOnline ? '#10b981' : '#ef4444';
-            const imageUrl = driver.foto_url || 'https://via.placeholder.com/150';
+            const imageUrl = driver.foto_url || `https://ui-avatars.com/api/?name=C&background=333&color=fff`;
             const iconHtml = `
               <div style="
                 width: 40px; 
