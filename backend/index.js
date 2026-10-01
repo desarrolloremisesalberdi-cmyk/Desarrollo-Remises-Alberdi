@@ -258,6 +258,58 @@ app.post('/api/viajes/request', async (req, res) => {
   }
 });
 
+// Registro de Chofer
+app.post('/api/choferes/register', async (req, res) => {
+  const { 
+    nombre, apellido, email, telefono, domicilio, dni, 
+    fecha_nacimiento, numero_movil, vehiculo_modelo, 
+    vehiculo_color, vehiculo_patente, datos_cobro, 
+    foto_perfil_base64, foto_carnet_base64, foto_dni_base64, foto_auto_base64 
+  } = req.body;
+  
+  try {
+    const existing = await db.query('SELECT * FROM choferes WHERE dni = $1', [dni]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'DNI ya registrado como chofer.' });
+    }
+
+    const saltRounds = 10;
+    const defaultPassword = await bcrypt.hash('123456', saltRounds);
+
+    let fotoPerfilUrl = null, fotoCarnetUrl = null, fotoDniUrl = null, fotoAutoUrl = null;
+
+    const uploadImage = async (base64String, folder) => {
+      if (!base64String) return null;
+      const base64Data = base64String.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, 'base64');
+      const filename = `${folder}/${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
+      const { data, error } = await supabase.storage.from('dni-fotos').upload(filename, buffer, { contentType: 'image/jpeg' });
+      if (error) {
+        console.error("Error subiendo imagen:", error);
+        return null;
+      }
+      return supabase.storage.from('dni-fotos').getPublicUrl(filename).data.publicUrl;
+    };
+
+    fotoPerfilUrl = await uploadImage(foto_perfil_base64, 'perfiles_chofer');
+    fotoCarnetUrl = await uploadImage(foto_carnet_base64, 'carnets_chofer');
+    fotoDniUrl = await uploadImage(foto_dni_base64, 'dnis_chofer');
+    fotoAutoUrl = await uploadImage(foto_auto_base64, 'autos_chofer');
+
+    const result = await db.query(
+      `INSERT INTO choferes 
+       (nombre, apellido, email, clave, telefono, domicilio, dni, fecha_nacimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_pago, foto_url, dni_foto_url, vehiculo_foto_url, estado, created_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'inactivo', NOW()) RETURNING *`,
+      [nombre, apellido, email, defaultPassword, telefono, domicilio, dni, fecha_nacimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl]
+    );
+
+    res.json({ success: true, chofer: result.rows[0] });
+  } catch (error) {
+    console.error('Error registrando chofer:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor.' });
+  }
+});
+
 // Login de Chofer
 app.post('/api/choferes/login', async (req, res) => {
   const { dni, clave } = req.body;

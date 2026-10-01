@@ -8,7 +8,7 @@ export default function ResetPasswordScreen({ route, navigation }) {
   const [token, setToken] = useState('');
   const [nuevaClave, setNuevaClave] = useState('');
   const [loading, setLoading] = useState(false);
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handleReset = async () => {

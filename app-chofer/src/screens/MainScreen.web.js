@@ -15,7 +15,7 @@ export default function MainScreen({ route, navigation }) {
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
 
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {

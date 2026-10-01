@@ -6,7 +6,7 @@ const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handleSendCode = async () => {

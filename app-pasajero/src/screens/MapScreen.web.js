@@ -17,7 +17,7 @@ export default function MapScreen({ route, navigation }) {
   // Recibir el usuario desde el Login (si existe)
   const user = route?.params?.user || { id: null, nombre: 'Invitado' };
 
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {

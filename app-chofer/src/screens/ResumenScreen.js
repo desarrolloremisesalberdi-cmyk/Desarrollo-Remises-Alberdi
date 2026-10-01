@@ -8,7 +8,7 @@ export default function ResumenScreen({ route, navigation }) {
   const [viajes, setViajes] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {

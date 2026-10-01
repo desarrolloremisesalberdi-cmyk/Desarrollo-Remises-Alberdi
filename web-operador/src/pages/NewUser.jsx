@@ -16,17 +16,49 @@ export default function NewUser() {
     vehiculo_patente: '',
     vehiculo_puertas: '4', // Por defecto 4 según requerimientos
     datos_cobro: '',
-    foto_url: ''
+    foto_perfil_base64: '',
+    foto_carnet_base64: '',
+    foto_dni_base64: '',
+    foto_auto_base64: ''
   });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleFileChange = (e, field) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, [field]: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Chofer registrado con éxito (Simulación)');
-    console.log('Datos enviados:', formData);
+    setLoading(true);
+    try {
+      const res = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Chofer registrado con éxito');
+        window.location.reload();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,25 +106,24 @@ export default function NewUser() {
                 <input type="date" name="licencia_vencimiento" onChange={handleChange} required />
               </div>
               <div className="form-group file-upload">
-                <label>Foto de Perfil del Chofer (URL temporal)</label>
-                <div className="upload-box" style={{ flexDirection: 'column', gap: 10 }}>
-                  <input type="text" name="foto_url" value={formData.foto_url} onChange={handleChange} placeholder="https://ejemplo.com/mifoto.jpg" style={{ width: '90%' }} />
-                  <span>o</span>
-                  <div><Upload size={16} /> Subir Imagen (Próximamente)</div>
+                <label>Foto de Perfil del Chofer</label>
+                <div className="upload-box">
+                  <Upload size={16} /> {formData.foto_perfil_base64 ? 'Imagen Seleccionada' : 'Subir Imagen'}
+                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'foto_perfil_base64')} />
                 </div>
               </div>
               <div className="form-group file-upload">
                 <label>Foto Carnet de Conducir</label>
                 <div className="upload-box">
-                  <Upload size={16} /> Subir Imagen
-                  <input type="file" accept="image/*" />
+                  <Upload size={16} /> {formData.foto_carnet_base64 ? 'Imagen Seleccionada' : 'Subir Imagen'}
+                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'foto_carnet_base64')} />
                 </div>
               </div>
               <div className="form-group file-upload">
                 <label>Foto Frente DNI</label>
                 <div className="upload-box">
-                  <Upload size={16} /> Subir Imagen
-                  <input type="file" accept="image/*" />
+                  <Upload size={16} /> {formData.foto_dni_base64 ? 'Imagen Seleccionada' : 'Subir Imagen'}
+                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'foto_dni_base64')} />
                 </div>
               </div>
             </div>
@@ -131,15 +162,17 @@ export default function NewUser() {
               <div className="form-group file-upload">
                 <label>Foto del Auto</label>
                 <div className="upload-box">
-                  <Upload size={16} /> Subir Imagen
-                  <input type="file" accept="image/*" />
+                  <Upload size={16} /> {formData.foto_auto_base64 ? 'Imagen Seleccionada' : 'Subir Imagen'}
+                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'foto_auto_base64')} />
                 </div>
               </div>
             </div>
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary btn-large">Crear Chofer</button>
+            <button type="submit" className="btn btn-primary btn-large" disabled={loading}>
+              {loading ? 'Registrando...' : 'Crear Chofer'}
+            </button>
           </div>
         </form>
       </div>

@@ -17,7 +17,7 @@ export default function MainScreen({ route, navigation }) {
   // En React Native (sin web) simularemos un chofer si no viene por params
   const chofer = route?.params?.chofer || { id: 'sim-native', dni: 'sim' };
 
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {

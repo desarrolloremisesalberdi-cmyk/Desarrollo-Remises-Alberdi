@@ -9,7 +9,7 @@ export default function LoginScreen({ navigation }) {
   const [clave, setClave] = useState('');
   const [recordar, setRecordar] = useState(false);
 
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {

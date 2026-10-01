@@ -8,7 +8,7 @@ const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
 export default function MapScreen({ route, navigation }) {
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);

@@ -12,7 +12,7 @@ export default function RegisterScreen({ navigation }) {
   const [fotoUri, setFotoUri] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handlePickImage = async () => {
