@@ -49,11 +49,14 @@ export default function MainScreen({ route, navigation }) {
             });
           },
           (error) => {
-            console.error('Error obteniendo ubicación', error);
-            alert('Error al obtener ubicación. Asegúrate de dar permisos de GPS a tu navegador.');
-            setIsOnline(false);
+            console.warn('Error obteniendo ubicación', error);
+            if (error.code === error.PERMISSION_DENIED) {
+              alert('Permiso de GPS denegado. Actívalo en tu navegador para trabajar.');
+              setIsOnline(false);
+            }
+            // Si es un error de timeout o accuracy, no apagamos el isOnline, intentará de nuevo.
           },
-          { enableHighAccuracy: true, maximumAge: 0 }
+          { enableHighAccuracy: false, maximumAge: 5000, timeout: 15000 }
         );
       } else {
         alert("Tu navegador no soporta GPS.");
