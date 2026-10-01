@@ -17,14 +17,13 @@ function DashboardMap() {
   const [activeDrivers, setActiveDrivers] = useState({});
 
   useEffect(() => {
-    // 1. Cargar el historial o estado actual desde la base de datos (Backend local)
-    fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/activos')
+    // 1. Cargar todos los choferes para tener la base real de desconectados
+    fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes')
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           const dict = {};
           data.choferes.forEach(ch => {
-            // Re-mapeamos para que coincida con el formato del socket
             dict[ch.id || ch.dni] = {
               chofer_id: ch.id || ch.dni,
               dni: ch.dni,
@@ -32,6 +31,7 @@ function DashboardMap() {
               lat: ch.lat,
               lng: ch.lng,
               isOnline: ch.is_online,
+              estado: ch.estado,
               foto_url: ch.foto_url
             };
           });
@@ -44,7 +44,10 @@ function DashboardMap() {
     socket.on('driver_location', (data) => {
       setActiveDrivers((prev) => ({
         ...prev,
-        [data.chofer_id]: data
+        [data.chofer_id]: {
+          ...prev[data.chofer_id], // Preserve other static info like estado
+          ...data
+        }
       }));
     });
 
@@ -53,11 +56,11 @@ function DashboardMap() {
     };
   }, []);
 
-  // Calcular totales
+  // Calcular totales reales
   const driversList = Object.values(activeDrivers);
   const autosLibres = driversList.filter(d => d.isOnline).length;
-  const autosOcupados = driversList.filter(d => !d.isOnline).length;
-  const autosDesconectados = 15 - (autosLibres + autosOcupados); // Asumiendo 15 flota total
+  const autosOcupados = driversList.filter(d => d.estado === 'ocupado').length;
+  const autosDesconectados = driversList.length - autosLibres - autosOcupados;
 
   return (
     <main className="content">

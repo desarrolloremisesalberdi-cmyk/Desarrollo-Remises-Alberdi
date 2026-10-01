@@ -339,6 +339,12 @@ app.post('/api/viajes/accept', async (req, res) => {
       "UPDATE viajes SET chofer_id = $1, estado = 'en_camino' WHERE id = $2 RETURNING *",
       [chofer_id, viaje_id]
     );
+
+    // Actualizar estado del chofer a ocupado
+    await db.query(
+      "UPDATE choferes SET estado = 'ocupado', is_online = false WHERE id = $1",
+      [chofer_id]
+    );
     
     if (result.rows.length === 0) {
       return res.json({ success: false, error: 'Viaje no encontrado' });
@@ -446,6 +452,12 @@ app.post('/api/viajes/finish', async (req, res) => {
 
     const viajeActualizado = result.rows[0];
 
+    // Volver a poner al chofer libre
+    await db.query(
+      "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
+      [viajeActualizado.chofer_id]
+    );
+
     // Avisar al pasajero del costo final
     io.emit('ride_finished', {
       viaje_id: viaje_id,
@@ -540,11 +552,18 @@ io.on('connection', (socket) => {
     
     // 2. Persistir en la base de datos
     try {
-      const estado = data.isOnline ? 'libre' : 'inactivo';
-      await db.query(
-        "UPDATE choferes SET lat = $1, lng = $2, is_online = $3, estado = $4 WHERE id = $5 OR dni = $6",
-        [data.lat, data.lng, data.isOnline, estado, data.chofer_id, data.dni]
-      );
+      if (data.isOnline) {
+        await db.query(
+          "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = 'libre' WHERE id = $3 OR dni = $4",
+          [data.lat, data.lng, data.chofer_id, data.dni]
+        );
+      } else {
+        // Solo marcar como inactivo si no está ocupado (porque al estar ocupado isOnline = false en la app)
+        await db.query(
+          "UPDATE choferes SET lat = $1, lng = $2, is_online = false, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
+          [data.lat, data.lng, data.chofer_id, data.dni]
+        );
+      }
     } catch (err) {
       console.error('Error al persistir ubicación:', err);
     }
