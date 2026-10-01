@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { UserPlus, Car, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function NewUser() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
@@ -50,7 +52,7 @@ export default function NewUser() {
       const data = await res.json();
       if (data.success) {
         alert('Chofer registrado con éxito');
-        window.location.reload();
+        navigate('/'); // Redirige a la gestión de choferes en lugar de recargar la página
       } else {
         alert('Error: ' + data.error);
       }
