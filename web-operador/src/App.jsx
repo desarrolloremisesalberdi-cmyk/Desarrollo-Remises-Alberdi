@@ -122,16 +122,24 @@ function DashboardMap() {
   );
 }
 
+import Configuration from './pages/Configuration';
+import { Settings as SettingsIcon } from 'lucide-react';
+
 function Layout({ children }) {
   const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   return (
-    <div className="dashboard">
+    <div className={`dashboard ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
       <nav className="sidebar">
-        <h2>Operador Alberdi</h2>
+        <div style={{ textAlign: 'center', cursor: 'pointer', padding: '10px 0' }} onClick={() => setIsCollapsed(!isCollapsed)}>
+          <img src="/logo.jpg" alt="Logo" style={{ width: isCollapsed ? '40px' : '150px', transition: 'width 0.3s', borderRadius: '8px' }} />
+        </div>
         <ul>
-          <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}><MapIcon /> Mapa en Vivo</Link></li>
-          <li><Link to="/choferes" className={location.pathname === '/choferes' ? 'active' : ''}><Car /> Choferes</Link></li>
-          <li><Link to="/finanzas" className={location.pathname === '/finanzas' ? 'active' : ''}><DollarSign /> Finanzas</Link></li>
+          <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}><MapIcon /> {!isCollapsed && "Mapa en Vivo"}</Link></li>
+          <li><Link to="/choferes" className={location.pathname === '/choferes' ? 'active' : ''}><Car /> {!isCollapsed && "Choferes"}</Link></li>
+          <li><Link to="/finanzas" className={location.pathname === '/finanzas' ? 'active' : ''}><DollarSign /> {!isCollapsed && "Finanzas"}</Link></li>
+          <li><Link to="/configuracion" className={location.pathname === '/configuracion' ? 'active' : ''}><SettingsIcon /> {!isCollapsed && "Configuración"}</Link></li>
         </ul>
       </nav>
       {children}
@@ -148,6 +156,7 @@ export default function App() {
           <Route path="/choferes" element={<Drivers />} />
           <Route path="/nuevo-usuario" element={<NewUser />} />
           <Route path="/finanzas" element={<Finances />} />
+          <Route path="/configuracion" element={<Configuration />} />
         </Routes>
       </Layout>
     </BrowserRouter>

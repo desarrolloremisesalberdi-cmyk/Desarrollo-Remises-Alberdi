@@ -258,6 +258,41 @@ app.post('/api/viajes/request', async (req, res) => {
   }
 });
 
+// ================= TARIFAS =================
+app.get('/api/tarifas', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM tarifas ORDER BY id DESC LIMIT 1');
+    res.json({ success: true, tarifas: result.rows[0] });
+  } catch (error) {
+    console.error('Error al obtener tarifas:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener tarifas' });
+  }
+});
+
+app.post('/api/tarifas', async (req, res) => {
+  const {
+    bajada_bandera_diurna,
+    precio_100m_diurna,
+    bajada_bandera_nocturna,
+    precio_100m_nocturna,
+    bajada_bandera_jubilados,
+    precio_100m_jubilados,
+    porcentaje_comision_agencia
+  } = req.body;
+  try {
+    const result = await db.query(
+      `INSERT INTO tarifas 
+      (bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+      [bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia]
+    );
+    res.json({ success: true, tarifas: result.rows[0] });
+  } catch (error) {
+    console.error('Error al actualizar tarifas:', error);
+    res.status(500).json({ success: false, error: 'Error al actualizar tarifas' });
+  }
+});
+
 // Registro de Chofer
 app.post('/api/choferes/register', async (req, res) => {
   const { 

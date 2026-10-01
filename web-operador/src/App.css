@@ -35,7 +35,6 @@ body {
   height: 100vh;
 }
 
-/* Sidebar Estilo Panel de Control */
 .sidebar {
   width: 270px;
   background: var(--card-bg);
@@ -45,6 +44,12 @@ body {
   padding: 35px 25px;
   display: flex;
   flex-direction: column;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dashboard.sidebar-collapsed .sidebar {
+  width: 90px;
+  padding: 35px 15px;
 }
 
 .sidebar h2 {
@@ -79,6 +84,11 @@ body {
   border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
+}
+
+.dashboard.sidebar-collapsed .sidebar ul li a {
+  justify-content: center;
+  padding: 14px 0;
 }
 
 .sidebar ul li a:hover {
