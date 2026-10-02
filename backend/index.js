@@ -592,7 +592,7 @@ server.listen(PORT, () => {
 app.post('/api/choferes/toggle-suspend', async (req, res) => {
   const { id, suspendido } = req.body;
   try {
-    const result = await db.query('UPDATE choferes SET suspendido =  WHERE id =  RETURNING *', [suspendido, id]);
+    const result = await db.query('UPDATE choferes SET suspendido = $1 WHERE id = $2 RETURNING *', [suspendido, id]);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Chofer no encontrado' });
     res.json({ success: true, chofer: result.rows[0] });
   } catch (error) {
