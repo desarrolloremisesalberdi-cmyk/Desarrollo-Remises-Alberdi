@@ -116,7 +116,7 @@ export default function Configuration() {
           </div>
         </div>
 
-        <button type="submit" className="btn-primary" style={{ marginTop: '20px', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={saving}>
+        <button type="submit" className="btn btn-primary btn-large" style={{ marginTop: '20px', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }} disabled={saving}>
           <Save size={20} style={{ marginRight: '8px' }} />
           {saving ? 'Guardando...' : 'Guardar Cambios'}
         </button>

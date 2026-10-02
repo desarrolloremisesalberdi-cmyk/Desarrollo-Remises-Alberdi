@@ -133,7 +133,7 @@ function Layout({ children }) {
     <div className={`dashboard ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
       <nav className="sidebar">
         <div style={{ textAlign: 'center', cursor: 'pointer', padding: '10px 0' }} onClick={() => setIsCollapsed(!isCollapsed)}>
-          <img src="/logo.jpg" alt="Logo" style={{ width: isCollapsed ? '40px' : '150px', transition: 'width 0.3s', borderRadius: '8px' }} />
+          <img src="/logo.png" alt="Logo" style={{ width: isCollapsed ? '40px' : '150px', transition: 'width 0.3s', borderRadius: '8px' }} />
         </div>
         <ul>
           <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}><MapIcon /> {!isCollapsed && "Mapa en Vivo"}</Link></li>
