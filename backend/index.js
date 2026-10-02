@@ -103,38 +103,8 @@ app.post('/api/users/register', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(clave, saltRounds);
 
-    // 3. Subir foto a Supabase Storage (si existe)
-    let dni_foto_url = null;
-    if (foto_base64) {
-      if (!supabase) {
-        return res.status(500).json({ success: false, error: 'Faltan variables de entorno SUPABASE_URL o SUPABASE_ANON_KEY en el servidor para procesar la imagen.' });
-      }
-
-      try {
-        const base64Data = foto_base64.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        const fileName = `dni_${dni}_${Date.now()}.jpg`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('dnis')
-          .upload(fileName, buffer, {
-            contentType: 'image/jpeg',
-            upsert: true
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: publicUrlData } = supabase.storage
-          .from('dnis')
-          .getPublicUrl(fileName);
-        
-        dni_foto_url = publicUrlData.publicUrl;
-      } catch (uploadErr) {
-        console.error('Error al subir imagen de DNI:', uploadErr);
-        // Podemos decidir fallar o continuar sin foto. Para este caso fallamos.
-        return res.status(400).json({ success: false, error: 'Error al procesar la foto del DNI.' });
-      }
-    }
+    // 3. Guardar base64 directamente en PostgreSQL (bypass Supabase Storage)
+    let dni_foto_url = foto_base64 || null;
 
     // 4. Guardar en Base de Datos
     const newUser = await db.query(
