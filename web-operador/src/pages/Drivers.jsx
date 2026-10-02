@@ -21,7 +21,8 @@ export default function Drivers() {
             movil: ch.numero_movil ? ch.numero_movil.toString().padStart(2, '0') : 'N/A',
             licencia_vencimiento: '2027-10-15', // Mock para la vista por ahora
             estado: ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido',
-            vehiculo: ch.vehiculo_modelo || 'Vehículo Genérico'
+            vehiculo: ch.vehiculo_modelo || 'Vehículo Genérico',
+            suspendido: ch.suspendido || false
           }));
           setDriversList(list);
         }
@@ -125,7 +126,36 @@ export default function Drivers() {
               
               <div className="detail-actions">
                 <button className="btn btn-primary">Editar Datos</button>
-                <button className="btn btn-danger">Suspender Chofer</button>
+                <button 
+                  className={`btn ${selectedDriver.suspendido ? 'btn-primary' : 'btn-danger'}`}
+                  onClick={() => {
+                    const confirmMsg = selectedDriver.suspendido 
+                      ? `¿Estás seguro de que quieres habilitar a ${selectedDriver.nombre}?`
+                      : `¿Estás seguro de que quieres suspender a ${selectedDriver.nombre}? No podrá iniciar sesión.`;
+                    
+                    if (window.confirm(confirmMsg)) {
+                      fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/toggle-suspend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: selectedDriver.id, suspendido: !selectedDriver.suspendido })
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        if (data.success) {
+                          // Update local state
+                          setDriversList(prev => prev.map(d => 
+                            d.id === selectedDriver.id ? { ...d, suspendido: !selectedDriver.suspendido } : d
+                          ));
+                          setSelectedDriver({ ...selectedDriver, suspendido: !selectedDriver.suspendido });
+                        } else {
+                          alert(data.error);
+                        }
+                      });
+                    }
+                  }}
+                >
+                  {selectedDriver.suspendido ? 'Habilitar Chofer' : 'Suspender Chofer'}
+                </button>
               </div>
             </div>
           ) : (

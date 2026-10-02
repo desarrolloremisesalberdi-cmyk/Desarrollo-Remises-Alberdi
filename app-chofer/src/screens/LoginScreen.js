@@ -64,7 +64,11 @@ export default function LoginScreen({ navigation }) {
         }
         navigation.replace('Main', { chofer: data.chofer });
       } else {
-        alert(data.error || 'Error al iniciar sesión');
+        if (data.error === 'suspended') {
+          alert('Usuario bloqueado. Comuniquese con el operador.');
+        } else {
+          alert(data.error || 'Error al iniciar sesión');
+        }
       }
     } catch (error) {
       alert('Error al conectar con el servidor');

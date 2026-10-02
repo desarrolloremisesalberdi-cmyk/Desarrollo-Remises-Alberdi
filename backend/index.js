@@ -307,7 +307,7 @@ app.post('/api/choferes/login', async (req, res) => {
   const { dni, clave } = req.body;
   try {
     const result = await db.query(
-      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado, foto_url FROM choferes WHERE dni = $1',
+      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado, foto_url, suspendido FROM choferes WHERE dni = $1',
       [dni]
     );
     
@@ -315,6 +315,9 @@ app.post('/api/choferes/login', async (req, res) => {
       const chofer = result.rows[0];
       const match = await bcrypt.compare(clave, chofer.clave);
       if (match) {
+        if (chofer.suspendido) {
+          return res.json({ success: false, error: 'suspended' });
+        }
         // Eliminar la clave antes de enviarlo al cliente
         delete chofer.clave;
         res.json({ success: true, chofer });
@@ -491,7 +494,7 @@ app.get('/api/choferes/activos', async (req, res) => {
 app.get('/api/choferes', async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, is_online, lat, lng, foto_url FROM choferes ORDER BY nombre ASC"
+      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, is_online, lat, lng, foto_url, suspendido FROM choferes ORDER BY nombre ASC"
     );
     res.json({ success: true, choferes: result.rows });
   } catch (error) {
@@ -583,4 +586,17 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
+});
+
+// Toggle suspension for a driver
+app.post('/api/choferes/toggle-suspend', async (req, res) => {
+  const { id, suspendido } = req.body;
+  try {
+    const result = await db.query('UPDATE choferes SET suspendido =  WHERE id =  RETURNING *', [suspendido, id]);
+    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Chofer no encontrado' });
+    res.json({ success: true, chofer: result.rows[0] });
+  } catch (error) {
+    console.error('Error toggling suspension:', error);
+    res.status(500).json({ success: false, error: 'Error del servidor' });
+  }
 });
