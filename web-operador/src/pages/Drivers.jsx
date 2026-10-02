@@ -19,7 +19,7 @@ export default function Drivers() {
             nombre: `${ch.nombre} ${ch.apellido}`,
             dni: ch.dni,
             movil: ch.numero_movil ? ch.numero_movil.toString().padStart(2, '0') : 'N/A',
-            licencia_vencimiento: '2027-10-15', // Mock para la vista por ahora
+            licencia_vencimiento: ch.licencia_vencimiento ? new Date(ch.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
             estado: ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido',
             vehiculo: ch.vehiculo_modelo || 'Vehículo Genérico',
             suspendido: ch.suspendido || false

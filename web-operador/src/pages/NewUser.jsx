@@ -12,6 +12,7 @@ export default function NewUser() {
     domicilio: '',
     dni: '',
     fecha_nacimiento: '',
+    licencia_vencimiento: '',
     numero_movil: '',
     vehiculo_modelo: '',
     vehiculo_color: '',
@@ -119,7 +120,7 @@ export default function NewUser() {
               </div>
               <div className="form-group">
                 <label>Vencimiento Carnet de Conducir</label>
-                <input type="date" name="licencia_vencimiento" onChange={handleChange} required />
+                <input type="date" name="licencia_vencimiento" value={formData.licencia_vencimiento} onChange={handleChange} required />
               </div>
               <div className="form-group file-upload">
                 <label>Foto de Perfil del Chofer</label>

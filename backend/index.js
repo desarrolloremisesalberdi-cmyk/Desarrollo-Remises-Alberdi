@@ -267,7 +267,7 @@ app.post('/api/tarifas', async (req, res) => {
 app.post('/api/choferes/register', async (req, res) => {
   const { 
     nombre, apellido, email, telefono, domicilio, dni, 
-    fecha_nacimiento, numero_movil, vehiculo_modelo, 
+    fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, 
     vehiculo_color, vehiculo_patente, datos_cobro, 
     foto_perfil_base64, foto_carnet_base64, foto_dni_base64, foto_auto_base64, clave 
   } = req.body;
@@ -290,9 +290,9 @@ app.post('/api/choferes/register', async (req, res) => {
 
     const result = await db.query(
       `INSERT INTO choferes 
-       (nombre, apellido, email, clave, telefono, domicilio, dni, fecha_nacimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_pago, foto_url, dni_foto_url, vehiculo_foto_url, estado, created_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'inactivo', NOW()) RETURNING *`,
-      [nombre, apellido, email, defaultPassword, telefono, domicilio, dni, fecha_nacimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl]
+       (nombre, apellido, email, clave, telefono, domicilio, dni, fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_pago, foto_url, dni_foto_url, vehiculo_foto_url, estado, created_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'inactivo', NOW()) RETURNING *`,
+      [nombre, apellido, email, defaultPassword, telefono, domicilio, dni, fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl]
     );
 
     res.json({ success: true, chofer: result.rows[0] });
@@ -494,7 +494,7 @@ app.get('/api/choferes/activos', async (req, res) => {
 app.get('/api/choferes', async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, is_online, lat, lng, foto_url, suspendido FROM choferes ORDER BY nombre ASC"
+      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, is_online, lat, lng, foto_url, suspendido, licencia_vencimiento FROM choferes ORDER BY nombre ASC"
     );
     res.json({ success: true, choferes: result.rows });
   } catch (error) {
