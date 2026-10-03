@@ -498,7 +498,11 @@ app.post('/api/viajes/finish', async (req, res) => {
     if (viaje.costo_fijo) {
       montoCalculado = parseFloat(viaje.costo_fijo) + costoEspera;
     }
-    const comisionAdmin = montoCalculado * (parseFloat(tarifas.porcentaje_comision_agencia) / 100);
+    
+    // Redondear el monto a entero (o 2 decimales, pero general es mejor entero para cobrar)
+    montoCalculado = Math.round(montoCalculado);
+    
+    const comisionAdmin = Math.round(montoCalculado * (parseFloat(tarifas.porcentaje_comision_agencia) / 100));
 
     // 6. Actualizar Viaje
     const result = await db.query(
