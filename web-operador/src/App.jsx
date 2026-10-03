@@ -58,8 +58,8 @@ function DashboardMap() {
 
   // Calcular totales reales
   const driversList = Object.values(activeDrivers);
-  const autosLibres = driversList.filter(d => d.isOnline && d.estado !== 'ocupado').length;
-  const autosOcupados = driversList.filter(d => d.isOnline && d.estado === 'ocupado').length;
+  const autosLibres = driversList.filter(d => d.isOnline && d.estado === 'libre').length;
+  const autosOcupados = driversList.filter(d => d.isOnline && (d.estado === 'ocupado' || d.estado === 'inactivo')).length;
   const autosDesconectados = driversList.filter(d => !d.isOnline).length;
 
   return (
@@ -75,18 +75,18 @@ function DashboardMap() {
             attribution='&copy; <a href="https://www.google.com/intl/en-US_US/help/terms_maps.html">Google Maps</a>'
           />
           {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng)) && d.isOnline).map(driver => {
-            const isLibre = driver.isOnline && driver.estado !== 'ocupado';
-            const isOcupado = driver.isOnline && driver.estado === 'ocupado';
+            const isLibre = driver.estado === 'libre';
+            const isOcupado = driver.estado === 'ocupado' || driver.estado === 'inactivo';
             
-            let borderColor = '#9ca3af'; // Gris (Desconectado)
-            let statusText = 'Desconectado (Gris)';
+            let borderColor = '#9ca3af'; // Gris (Por defecto)
+            let statusText = 'Desconocido';
             
             if (isLibre) {
               borderColor = '#10b981'; // Verde (Libre)
               statusText = 'Auto Libre (Verde)';
             } else if (isOcupado) {
-              borderColor = '#ef4444'; // Rojo (Ocupado)
-              statusText = 'Auto Ocupado (Rojo)';
+              borderColor = '#ef4444'; // Rojo (Ocupado / Inactivo)
+              statusText = 'Auto Ocupado/Inactivo (Rojo)';
             }
 
             const imageUrl = driver.foto_url || `https://ui-avatars.com/api/?name=C&background=333&color=fff`;

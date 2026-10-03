@@ -698,6 +698,8 @@ app.get('/api/finanzas/chofer/:id', async (req, res) => {
 });
 
 // Configuración de WebSockets para tiempo real
+const connectedDrivers = {};
+
 io.on('connection', (socket) => {
   console.log(`Nuevo usuario conectado: ${socket.id}`);
 
@@ -708,15 +710,17 @@ io.on('connection', (socket) => {
     
     // 2. Persistir en la base de datos
     try {
+      connectedDrivers[socket.id] = data.chofer_id;
+
       if (data.isOnline) {
         await db.query(
           "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = 'libre' WHERE id = $3 OR dni = $4",
           [data.lat, data.lng, data.chofer_id, data.dni]
         );
       } else {
-        // Solo marcar como inactivo si no está ocupado (porque al estar ocupado isOnline = false en la app)
+        // App is open, just not ready to receive trips.
         await db.query(
-          "UPDATE choferes SET lat = $1, lng = $2, is_online = false, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
+          "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
           [data.lat, data.lng, data.chofer_id, data.dni]
         );
       }
@@ -734,8 +738,17 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('toggle_espera', data);
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log(`Usuario desconectado: ${socket.id}`);
+    const chofer_id = connectedDrivers[socket.id];
+    if (chofer_id) {
+      try {
+        await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo' WHERE id = $1", [chofer_id]);
+      } catch (e) {
+        console.error('Error al desconectar chofer:', e);
+      }
+      delete connectedDrivers[socket.id];
+    }
   });
 });
 
