@@ -625,7 +625,7 @@ app.get('/api/choferes/activos', async (req, res) => {
 app.get('/api/choferes', async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, vehiculo_patente, vehiculo_color, datos_pago, domicilio, telefono, email, fecha_nacimiento, is_online, lat, lng, foto_url, suspendido, licencia_vencimiento FROM choferes ORDER BY nombre ASC"
+      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, vehiculo_patente, vehiculo_color, datos_pago, domicilio, telefono, email, fecha_nacimiento, is_online, lat, lng, foto_url, dni_foto_url, vehiculo_foto_url, suspendido, licencia_vencimiento FROM choferes ORDER BY nombre ASC"
     );
     res.json({ success: true, choferes: result.rows });
   } catch (error) {
@@ -738,14 +738,19 @@ app.post('/api/choferes/toggle-suspend', async (req, res) => {
 // Editing driver
 app.put('/api/choferes/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, domicilio, telefono, email, fecha_nacimiento, vehiculo_color } = req.body;
+  const { nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, domicilio, telefono, email, fecha_nacimiento, vehiculo_color, foto_perfil_base64, foto_dni_base64, foto_auto_base64 } = req.body;
   try {
-    const result = await db.query(
-      `UPDATE choferes 
-       SET nombre = $1, apellido = $2, dni = $3, numero_movil = $4, vehiculo_modelo = $5, vehiculo_patente = $6, licencia_vencimiento = $7, datos_pago = $8, domicilio = $9, telefono = $10, email = $11, fecha_nacimiento = $12, vehiculo_color = $13
-       WHERE id = $14 RETURNING *`,
-      [nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, domicilio, telefono, email, fecha_nacimiento, vehiculo_color, id]
-    );
+    // Si viene la foto base64, la actualizamos, si no, mantenemos la existente.
+    const updateQuery = `
+      UPDATE choferes 
+      SET nombre = $1, apellido = $2, dni = $3, numero_movil = $4, vehiculo_modelo = $5, vehiculo_patente = $6, licencia_vencimiento = $7, datos_pago = $8, domicilio = $9, telefono = $10, email = $11, fecha_nacimiento = $12, vehiculo_color = $13,
+      foto_url = COALESCE($14, foto_url),
+      dni_foto_url = COALESCE($15, dni_foto_url),
+      vehiculo_foto_url = COALESCE($16, vehiculo_foto_url)
+      WHERE id = $17 RETURNING *
+    `;
+    const values = [nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, domicilio, telefono, email, fecha_nacimiento, vehiculo_color, foto_perfil_base64 || null, foto_dni_base64 || null, foto_auto_base64 || null, id];
+    const result = await db.query(updateQuery, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Chofer no encontrado' });
     res.json({ success: true, chofer: result.rows[0] });
   } catch (error) {

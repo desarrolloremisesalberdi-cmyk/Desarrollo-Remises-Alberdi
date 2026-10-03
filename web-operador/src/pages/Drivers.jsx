@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, AlertTriangle, CheckCircle, ChevronRight, UserPlus } from 'lucide-react';
+import { Search, AlertTriangle, CheckCircle, ChevronRight, UserPlus, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Drivers() {
@@ -184,7 +184,10 @@ export default function Drivers() {
                     vehiculo_patente: selectedDriver.vehiculo_patente || '',
                     vehiculo_color: selectedDriver.vehiculo_color || '',
                     vencimiento_carnet: selectedDriver.licencia_vencimiento_str || '',
-                    datos_pago: selectedDriver.datos_pago || ''
+                    datos_pago: selectedDriver.datos_pago || '',
+                    foto_perfil_base64: '',
+                    foto_dni_base64: '',
+                    foto_auto_base64: ''
                   });
                   setEditTab('personales');
                 }}>Editar Datos</button>
@@ -248,6 +251,13 @@ export default function Drivers() {
               >
                 Servicio y Vehículo
               </button>
+              <button 
+                type="button" 
+                onClick={() => setEditTab('fotos')} 
+                style={{ background: editTab === 'fotos' ? '#3b82f6' : 'transparent', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer' }}
+              >
+                Fotos / Documentos
+              </button>
             </div>
 
             <form onSubmit={handleUpdateDriver}>
@@ -309,6 +319,57 @@ export default function Drivers() {
                   <div className="form-group">
                     <label>Patente</label>
                     <input type="text" value={editingDriver.vehiculo_patente} onChange={e => setEditingDriver({...editingDriver, vehiculo_patente: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                </div>
+              )}
+
+              {editTab === 'fotos' && (
+                <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                  <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '10px' }}>Si subes una foto nueva, reemplazará a la existente. Si no seleccionas nada, se mantendrá la foto actual.</p>
+                  
+                  <div className="form-group" style={{ background: '#374151', padding: '15px', borderRadius: '8px' }}>
+                    <label>Foto de Perfil del Chofer</label>
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Upload size={20} color="#9ca3af" />
+                      <input type="file" accept="image/*" onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setEditingDriver(prev => ({ ...prev, foto_perfil_base64: reader.result }));
+                          reader.readAsDataURL(file);
+                        }
+                      }} style={{ color: 'white' }} />
+                    </div>
+                  </div>
+                  
+                  <div className="form-group" style={{ background: '#374151', padding: '15px', borderRadius: '8px' }}>
+                    <label>Foto Frente DNI</label>
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Upload size={20} color="#9ca3af" />
+                      <input type="file" accept="image/*" onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setEditingDriver(prev => ({ ...prev, foto_dni_base64: reader.result }));
+                          reader.readAsDataURL(file);
+                        }
+                      }} style={{ color: 'white' }} />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ background: '#374151', padding: '15px', borderRadius: '8px' }}>
+                    <label>Foto del Auto</label>
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Upload size={20} color="#9ca3af" />
+                      <input type="file" accept="image/*" onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setEditingDriver(prev => ({ ...prev, foto_auto_base64: reader.result }));
+                          reader.readAsDataURL(file);
+                        }
+                      }} style={{ color: 'white' }} />
+                    </div>
                   </div>
                 </div>
               )}
