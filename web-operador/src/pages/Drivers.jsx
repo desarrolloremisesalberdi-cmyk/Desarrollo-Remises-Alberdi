@@ -7,6 +7,7 @@ export default function Drivers() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [driversList, setDriversList] = useState([]);
   const [editingDriver, setEditingDriver] = useState(null);
+  const [editTab, setEditTab] = useState('personales');
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -168,19 +169,25 @@ export default function Drivers() {
               </div>
               
               <div className="detail-actions">
-                <button className="btn btn-primary" onClick={() => setEditingDriver({
-                  id: selectedDriver.id,
-                  nombre: selectedDriver.nombre || '',
-                  apellido: selectedDriver.apellido || '',
-                  dni: selectedDriver.dni || '',
-                  telefono: selectedDriver.telefono || '',
-                  domicilio: selectedDriver.domicilio || '',
-                  numero_movil: selectedDriver.numero_movil || '',
-                  vehiculo_modelo: selectedDriver.vehiculo_modelo || '',
-                  vehiculo_patente: selectedDriver.vehiculo_patente || '',
-                  vencimiento_carnet: selectedDriver.licencia_vencimiento_str || '',
-                  datos_pago: selectedDriver.datos_pago || ''
-                })}>Editar Datos</button>
+                <button className="btn btn-primary" onClick={() => {
+                  setEditingDriver({
+                    id: selectedDriver.id,
+                    nombre: selectedDriver.nombre || '',
+                    apellido: selectedDriver.apellido || '',
+                    dni: selectedDriver.dni || '',
+                    telefono: selectedDriver.telefono || '',
+                    domicilio: selectedDriver.domicilio || '',
+                    email: selectedDriver.email || '',
+                    fecha_nacimiento: selectedDriver.fecha_nacimiento ? new Date(selectedDriver.fecha_nacimiento).toISOString().split('T')[0] : '',
+                    numero_movil: selectedDriver.numero_movil || '',
+                    vehiculo_modelo: selectedDriver.vehiculo_modelo || '',
+                    vehiculo_patente: selectedDriver.vehiculo_patente || '',
+                    vehiculo_color: selectedDriver.vehiculo_color || '',
+                    vencimiento_carnet: selectedDriver.licencia_vencimiento_str || '',
+                    datos_pago: selectedDriver.datos_pago || ''
+                  });
+                  setEditTab('personales');
+                }}>Editar Datos</button>
                 <button 
                   className={`btn ${selectedDriver.suspendido ? 'btn-primary' : 'btn-danger'}`}
                   onClick={() => {
@@ -223,50 +230,90 @@ export default function Drivers() {
 
       {editingDriver && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ background: '#1f2937', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ marginBottom: '20px', borderBottom: '1px solid #374151', paddingBottom: '10px' }}>Editar Chofer</h2>
-            <form onSubmit={handleUpdateDriver} className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div className="form-group">
-                <label>Nombre</label>
-                <input type="text" value={editingDriver.nombre} onChange={e => setEditingDriver({...editingDriver, nombre: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Apellido</label>
-                <input type="text" value={editingDriver.apellido} onChange={e => setEditingDriver({...editingDriver, apellido: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>DNI</label>
-                <input type="text" value={editingDriver.dni} onChange={e => setEditingDriver({...editingDriver, dni: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Número de Móvil</label>
-                <input type="number" value={editingDriver.numero_movil} onChange={e => setEditingDriver({...editingDriver, numero_movil: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Teléfono</label>
-                <input type="tel" value={editingDriver.telefono} onChange={e => setEditingDriver({...editingDriver, telefono: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>Domicilio</label>
-                <input type="text" value={editingDriver.domicilio} onChange={e => setEditingDriver({...editingDriver, domicilio: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Modelo de Vehículo</label>
-                <input type="text" value={editingDriver.vehiculo_modelo} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Patente</label>
-                <input type="text" value={editingDriver.vehiculo_patente} onChange={e => setEditingDriver({...editingDriver, vehiculo_patente: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Alias / CBU (Pago Anticipado)</label>
-                <input type="text" value={editingDriver.datos_pago} onChange={e => setEditingDriver({...editingDriver, datos_pago: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div className="form-group">
-                <label>Vencimiento Carnet</label>
-                <input type="date" value={editingDriver.vencimiento_carnet} onChange={e => setEditingDriver({...editingDriver, vencimiento_carnet: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
-              </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+          <div style={{ background: '#1f2937', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: '15px' }}>Editar Chofer</h2>
+            
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #374151', paddingBottom: '10px' }}>
+              <button 
+                type="button" 
+                onClick={() => setEditTab('personales')} 
+                style={{ background: editTab === 'personales' ? '#3b82f6' : 'transparent', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer' }}
+              >
+                Datos Personales
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setEditTab('vehiculo')} 
+                style={{ background: editTab === 'vehiculo' ? '#3b82f6' : 'transparent', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer' }}
+              >
+                Servicio y Vehículo
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateDriver}>
+              {editTab === 'personales' && (
+                <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div className="form-group">
+                    <label>Nombre</label>
+                    <input type="text" value={editingDriver.nombre} onChange={e => setEditingDriver({...editingDriver, nombre: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Apellido</label>
+                    <input type="text" value={editingDriver.apellido} onChange={e => setEditingDriver({...editingDriver, apellido: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>DNI</label>
+                    <input type="text" value={editingDriver.dni} onChange={e => setEditingDriver({...editingDriver, dni: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" value={editingDriver.telefono} onChange={e => setEditingDriver({...editingDriver, telefono: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input type="email" value={editingDriver.email} onChange={e => setEditingDriver({...editingDriver, email: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Fecha de Nacimiento</label>
+                    <input type="date" value={editingDriver.fecha_nacimiento} onChange={e => setEditingDriver({...editingDriver, fecha_nacimiento: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Domicilio</label>
+                    <input type="text" value={editingDriver.domicilio} onChange={e => setEditingDriver({...editingDriver, domicilio: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Vencimiento Carnet de Conducir</label>
+                    <input type="date" value={editingDriver.vencimiento_carnet} onChange={e => setEditingDriver({...editingDriver, vencimiento_carnet: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                </div>
+              )}
+
+              {editTab === 'vehiculo' && (
+                <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div className="form-group">
+                    <label>Número de Móvil</label>
+                    <input type="number" value={editingDriver.numero_movil} onChange={e => setEditingDriver({...editingDriver, numero_movil: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Alias / CBU (Pago Anticipado)</label>
+                    <input type="text" value={editingDriver.datos_pago} onChange={e => setEditingDriver({...editingDriver, datos_pago: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Modelo de Vehículo</label>
+                    <input type="text" value={editingDriver.vehiculo_modelo} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Color</label>
+                    <input type="text" value={editingDriver.vehiculo_color} onChange={e => setEditingDriver({...editingDriver, vehiculo_color: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Patente</label>
+                    <input type="text" value={editingDriver.vehiculo_patente} onChange={e => setEditingDriver({...editingDriver, vehiculo_patente: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', borderTop: '1px solid #374151', paddingTop: '15px' }}>
                 <button type="button" className="btn btn-danger" onClick={() => setEditingDriver(null)}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">Guardar Cambios</button>
               </div>
