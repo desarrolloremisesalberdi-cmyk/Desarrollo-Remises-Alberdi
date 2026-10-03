@@ -481,24 +481,24 @@ app.post('/api/viajes/finish', async (req, res) => {
 
     // 4. Determinar Tarifa (Diurna, Nocturna, Jubilado)
     const tarifaType = getTarifaType();
-    let bajada = tarifas.bajada_bandera_diurna;
-    let precio100m = tarifas.precio_100m_diurna;
+    let bajada = parseFloat(tarifas.bajada_bandera_diurna);
+    let precio100m = parseFloat(tarifas.precio_100m_diurna);
 
     if (esJubilado) {
-      bajada = tarifas.bajada_bandera_jubilados;
-      precio100m = tarifas.precio_100m_jubilados;
+      bajada = parseFloat(tarifas.bajada_bandera_jubilados);
+      precio100m = parseFloat(tarifas.precio_100m_jubilados);
     } else if (tarifaType === 'nocturna') {
-      bajada = tarifas.bajada_bandera_nocturna;
-      precio100m = tarifas.precio_100m_nocturna;
+      bajada = parseFloat(tarifas.bajada_bandera_nocturna);
+      precio100m = parseFloat(tarifas.precio_100m_nocturna);
     }
 
     // 5. Calcular monto total y comisión
-    const costoEspera = (espera_minutos / 60) * (tarifas.precio_espera_hora || 0);
+    const costoEspera = (espera_minutos / 60) * parseFloat(tarifas.precio_espera_hora || 0);
     let montoCalculado = bajada + (precio100m * distancia100m) + costoEspera;
     if (viaje.costo_fijo) {
       montoCalculado = parseFloat(viaje.costo_fijo) + costoEspera;
     }
-    const comisionAdmin = montoCalculado * (tarifas.porcentaje_comision_agencia / 100);
+    const comisionAdmin = montoCalculado * (parseFloat(tarifas.porcentaje_comision_agencia) / 100);
 
     // 6. Actualizar Viaje
     const result = await db.query(
