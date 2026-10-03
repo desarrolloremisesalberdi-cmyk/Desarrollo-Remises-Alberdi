@@ -6,6 +6,7 @@ export default function Drivers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [driversList, setDriversList] = useState([]);
+  const [editingDriver, setEditingDriver] = useState(null);
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -15,13 +16,14 @@ export default function Drivers() {
         if (data.success) {
           // Normalizar datos para la vista
           const list = data.choferes.map(ch => ({
+            ...ch, // Mantener datos crudos
             id: ch.id,
-            nombre: `${ch.nombre} ${ch.apellido}`,
+            nombreCompleto: `${ch.nombre} ${ch.apellido}`,
             dni: ch.dni,
-            movil: ch.numero_movil ? ch.numero_movil.toString().padStart(2, '0') : 'N/A',
-            licencia_vencimiento: ch.licencia_vencimiento ? new Date(ch.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
-            estado: ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido',
-            vehiculo: ch.vehiculo_modelo || 'Vehículo Genérico',
+            movilStr: ch.numero_movil ? ch.numero_movil.toString().padStart(2, '0') : 'N/A',
+            licencia_vencimiento_str: ch.licencia_vencimiento ? new Date(ch.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
+            estado_str: ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido',
+            vehiculo_str: ch.vehiculo_modelo || 'Vehículo Genérico',
             suspendido: ch.suspendido || false
           }));
           setDriversList(list);
@@ -32,7 +34,7 @@ export default function Drivers() {
 
   // Filtramos por DNI o Número de Móvil
   const filteredDrivers = driversList.filter(driver => 
-    driver.dni.includes(searchTerm) || driver.movil.includes(searchTerm)
+    (driver.dni && driver.dni.includes(searchTerm)) || (driver.movilStr && driver.movilStr.includes(searchTerm))
   );
 
   // Función para determinar el estado de la licencia
@@ -48,6 +50,43 @@ export default function Drivers() {
       return { text: 'POR VENCER (Menos de 30 días)', color: 'orange', icon: <AlertTriangle size={16} /> };
     }
     return { text: 'AL DÍA', color: 'green', icon: <CheckCircle size={16} /> };
+  };
+
+  const handleUpdateDriver = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`https://desarrollo-remises-alberdi.onrender.com/api/choferes/${editingDriver.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingDriver)
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Actualizar la lista
+        const updatedList = driversList.map(d => {
+          if (d.id === editingDriver.id) {
+            return {
+              ...data.chofer,
+              nombreCompleto: `${data.chofer.nombre} ${data.chofer.apellido}`,
+              dni: data.chofer.dni,
+              movilStr: data.chofer.numero_movil ? data.chofer.numero_movil.toString().padStart(2, '0') : 'N/A',
+              licencia_vencimiento_str: data.chofer.licencia_vencimiento ? new Date(data.chofer.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
+              estado_str: data.chofer.estado ? data.chofer.estado.charAt(0).toUpperCase() + data.chofer.estado.slice(1) : 'Desconocido',
+              vehiculo_str: data.chofer.vehiculo_modelo || 'Vehículo Genérico',
+              suspendido: data.chofer.suspendido || false
+            };
+          }
+          return d;
+        });
+        setDriversList(updatedList);
+        setSelectedDriver(updatedList.find(d => d.id === editingDriver.id));
+        setEditingDriver(null);
+      } else {
+        alert(data.error || 'Error al actualizar');
+      }
+    } catch (error) {
+      alert('Error de red');
+    }
   };
 
   return (
@@ -81,7 +120,7 @@ export default function Drivers() {
               onClick={() => setSelectedDriver(driver)}
             >
               <div className="driver-info-basic">
-                <h3>Móvil #{driver.movil} - {driver.nombre}</h3>
+                <h3>Móvil #{driver.movilStr} - {driver.nombreCompleto}</h3>
                 <p>DNI: {driver.dni}</p>
               </div>
               <ChevronRight color="#888" />
@@ -94,12 +133,12 @@ export default function Drivers() {
         <div className="driver-detail">
           {selectedDriver ? (
             <div className="detail-card">
-              <h2>Ficha del Chofer: {selectedDriver.nombre}</h2>
+              <h2>Ficha del Chofer: {selectedDriver.nombreCompleto}</h2>
               <hr />
               <div className="detail-grid">
                 <div className="detail-item">
                   <span>Móvil Asignado:</span>
-                  <strong>#{selectedDriver.movil}</strong>
+                  <strong>#{selectedDriver.movilStr}</strong>
                 </div>
                 <div className="detail-item">
                   <span>DNI:</span>
@@ -107,25 +146,39 @@ export default function Drivers() {
                 </div>
                 <div className="detail-item">
                   <span>Estado en Sistema:</span>
-                  <strong>{selectedDriver.estado}</strong>
+                  <strong>{selectedDriver.estado_str}</strong>
                 </div>
                 <div className="detail-item">
                   <span>Vehículo:</span>
-                  <strong>{selectedDriver.vehiculo}</strong>
+                  <strong>{selectedDriver.vehiculo_str} (Patente: {selectedDriver.vehiculo_patente})</strong>
+                </div>
+                <div className="detail-item">
+                  <span>Alias / CBU:</span>
+                  <strong>{selectedDriver.datos_pago || 'No especificado'}</strong>
                 </div>
                 
-                <div className="detail-item license-status">
+                <div className="detail-item license-status" style={{ gridColumn: '1 / -1' }}>
                   <span>Estado de Licencia:</span>
-                  <div className={`badge badge-${checkLicenseStatus(selectedDriver.licencia_vencimiento).color}`}>
-                    {checkLicenseStatus(selectedDriver.licencia_vencimiento).icon}
-                    <strong style={{marginLeft: 5}}>{checkLicenseStatus(selectedDriver.licencia_vencimiento).text}</strong>
+                  <div className={`badge badge-${checkLicenseStatus(selectedDriver.licencia_vencimiento_str).color}`}>
+                    {checkLicenseStatus(selectedDriver.licencia_vencimiento_str).icon}
+                    <strong style={{marginLeft: 5}}>{checkLicenseStatus(selectedDriver.licencia_vencimiento_str).text}</strong>
                   </div>
-                  <p className="expiration-date">Vence el: {selectedDriver.licencia_vencimiento}</p>
+                  <p className="expiration-date">Vence el: {selectedDriver.licencia_vencimiento_str}</p>
                 </div>
               </div>
               
               <div className="detail-actions">
-                <button className="btn btn-primary">Editar Datos</button>
+                <button className="btn btn-primary" onClick={() => setEditingDriver({
+                  id: selectedDriver.id,
+                  nombre: selectedDriver.nombre || '',
+                  apellido: selectedDriver.apellido || '',
+                  dni: selectedDriver.dni || '',
+                  numero_movil: selectedDriver.numero_movil || '',
+                  vehiculo_modelo: selectedDriver.vehiculo_modelo || '',
+                  vehiculo_patente: selectedDriver.vehiculo_patente || '',
+                  vencimiento_carnet: selectedDriver.licencia_vencimiento_str || '',
+                  datos_pago: selectedDriver.datos_pago || ''
+                })}>Editar Datos</button>
                 <button 
                   className={`btn ${selectedDriver.suspendido ? 'btn-primary' : 'btn-danger'}`}
                   onClick={() => {
@@ -165,6 +218,53 @@ export default function Drivers() {
           )}
         </div>
       </div>
+
+      {editingDriver && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ background: '#1f2937', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: '20px', borderBottom: '1px solid #374151', paddingBottom: '10px' }}>Editar Chofer</h2>
+            <form onSubmit={handleUpdateDriver} className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div className="form-group">
+                <label>Nombre</label>
+                <input type="text" value={editingDriver.nombre} onChange={e => setEditingDriver({...editingDriver, nombre: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Apellido</label>
+                <input type="text" value={editingDriver.apellido} onChange={e => setEditingDriver({...editingDriver, apellido: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>DNI</label>
+                <input type="text" value={editingDriver.dni} onChange={e => setEditingDriver({...editingDriver, dni: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Número de Móvil</label>
+                <input type="number" value={editingDriver.numero_movil} onChange={e => setEditingDriver({...editingDriver, numero_movil: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Modelo de Vehículo</label>
+                <input type="text" value={editingDriver.vehiculo_modelo} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Patente</label>
+                <input type="text" value={editingDriver.vehiculo_patente} onChange={e => setEditingDriver({...editingDriver, vehiculo_patente: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Alias / CBU (Pago Anticipado)</label>
+                <input type="text" value={editingDriver.datos_pago} onChange={e => setEditingDriver({...editingDriver, datos_pago: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Vencimiento Carnet</label>
+                <input type="date" value={editingDriver.vencimiento_carnet} onChange={e => setEditingDriver({...editingDriver, vencimiento_carnet: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" className="btn btn-danger" onClick={() => setEditingDriver(null)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">Guardar Cambios</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

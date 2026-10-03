@@ -735,3 +735,21 @@ app.post('/api/choferes/toggle-suspend', async (req, res) => {
     res.status(500).json({ success: false, error: 'Error del servidor' });
   }
 });
+// Editing driver
+app.put('/api/choferes/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago } = req.body;
+  try {
+    const result = await db.query(
+      `UPDATE choferes 
+       SET nombre = $1, apellido = $2, dni = $3, numero_movil = $4, vehiculo_modelo = $5, vehiculo_patente = $6, vencimiento_carnet = $7, datos_pago = $8
+       WHERE id = $9 RETURNING *`,
+      [nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Chofer no encontrado' });
+    res.json({ success: true, chofer: result.rows[0] });
+  } catch (error) {
+    console.error('Error actualizando chofer:', error);
+    res.status(500).json({ success: false, error: 'Error del servidor' });
+  }
+});
