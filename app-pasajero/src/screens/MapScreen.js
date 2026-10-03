@@ -46,12 +46,26 @@ export default function MapScreen({ route, navigation }) {
     const origen = coordsOrigenSim || coordsOrigen;
     const destino = coordsDestinoSim || coordsDestino;
     if (!tarifas || !origen || !destino) return 0;
-    const dist = calcularDistancia(origen.lat, origen.lng, destino.lat, destino.lng) * 1.3;
+    
+    const CASILDA_LAT = -33.044167;
+    const CASILDA_LNG = -61.168056;
+    const distDesdeCasilda = calcularDistancia(origen.lat, origen.lng, CASILDA_LAT, CASILDA_LNG);
+    const distViaje = calcularDistancia(origen.lat, origen.lng, destino.lat, destino.lng) * 1.3;
+    
     const bajada = parseFloat(tarifas.bajada_bandera_diurna) || 0;
-    const precio100 = parseFloat(tarifas.precio_100m_diurna) || 0;
     const espera = parseInt(minutosEsperaSimulados) || 0;
     const costoEspera = (espera / 60) * (parseFloat(tarifas.precio_espera_hora) || 0);
-    return Math.round(bajada + (precio100 * (dist * 10)) + costoEspera);
+    
+    let costoDistancia = 0;
+    if (distDesdeCasilda > 15 || distViaje > 15) {
+      const precioKmExtra = parseFloat(tarifas.precio_km_extra) || 1100;
+      costoDistancia = precioKmExtra * distViaje;
+    } else {
+      const precio100 = parseFloat(tarifas.precio_100m_diurna) || 0;
+      costoDistancia = precio100 * (distViaje * 10);
+    }
+    
+    return Math.round(bajada + costoDistancia + costoEspera);
   };
 
   // Google Places Autocomplete handle
