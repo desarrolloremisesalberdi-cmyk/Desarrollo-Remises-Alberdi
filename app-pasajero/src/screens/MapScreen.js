@@ -19,6 +19,9 @@ export default function MapScreen({ route, navigation }) {
   const [destinosFijos, setDestinosFijos] = useState([]);
   const [tarifas, setTarifas] = useState(null);
   const [minutosEsperaSimulados, setMinutosEsperaSimulados] = useState('');
+  
+  const [coordsOrigenSim, setCoordsOrigenSim] = useState(null);
+  const [coordsDestinoSim, setCoordsDestinoSim] = useState(null);
 
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
@@ -40,8 +43,10 @@ export default function MapScreen({ route, navigation }) {
   };
 
   const calcularCostoSimulado = () => {
-    if (!tarifas || !coordsOrigen || !coordsDestino) return 0;
-    const dist = calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng) * 1.3;
+    const origen = coordsOrigenSim || coordsOrigen;
+    const destino = coordsDestinoSim || coordsDestino;
+    if (!tarifas || !origen || !destino) return 0;
+    const dist = calcularDistancia(origen.lat, origen.lng, destino.lat, destino.lng) * 1.3;
     const bajada = parseFloat(tarifas.bajada_bandera_diurna) || 0;
     const precio100 = parseFloat(tarifas.precio_100m_diurna) || 0;
     const espera = parseInt(minutosEsperaSimulados) || 0;
@@ -322,14 +327,47 @@ export default function MapScreen({ route, navigation }) {
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 15, textAlign: 'center' }}>Simulador / Destinos</Text>
             
             <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 15, borderRadius: 10, marginBottom: 20 }}>
-              <Text style={{ color: theme.text, fontWeight: 'bold', marginBottom: 5 }}>Simulador (Origen a Destino)</Text>
-              {!coordsOrigen || !coordsDestino ? (
-                <Text style={{ color: '#ef4444', fontSize: 13 }}>Busca y selecciona tu origen y destino en el mapa para simular.</Text>
+              <Text style={{ color: theme.text, fontWeight: 'bold', marginBottom: 10 }}>Simular un viaje personalizado</Text>
+              
+              <View style={{ zIndex: 30, marginBottom: 10 }}>
+                <GooglePlacesAutocomplete
+                  placeholder="Origen de simulación"
+                  fetchDetails={true}
+                  onPress={(data, details = null) => {
+                    setCoordsOrigenSim({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
+                  }}
+                  query={{ key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar' }}
+                  requestUrl={{ url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps', useOnPlatform: 'native' }}
+                  styles={{...googlePlacesStyles, textInput: {...googlePlacesStyles.textInput, height: 40}}}
+                />
+              </View>
+              <View style={{ zIndex: 20, marginBottom: 10 }}>
+                <GooglePlacesAutocomplete
+                  placeholder="Destino de simulación"
+                  fetchDetails={true}
+                  onPress={(data, details = null) => {
+                    setCoordsDestinoSim({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
+                  }}
+                  query={{ key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar' }}
+                  requestUrl={{ url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps', useOnPlatform: 'native' }}
+                  styles={{...googlePlacesStyles, textInput: {...googlePlacesStyles.textInput, height: 40}}}
+                />
+              </View>
+
+              {(!coordsOrigenSim && !coordsOrigen) || (!coordsDestinoSim && !coordsDestino) ? (
+                <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 5 }}>Ingresa un origen y un destino para simular.</Text>
               ) : (
-                <View>
-                  <Text style={{ color: theme.text, fontSize: 13, marginBottom: 10 }}>Distancia aprox: {(calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng) * 1.3).toFixed(1)} km</Text>
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ color: theme.text, fontSize: 13, marginBottom: 10 }}>
+                    Distancia aprox: {(calcularDistancia(
+                      (coordsOrigenSim || coordsOrigen).lat, 
+                      (coordsOrigenSim || coordsOrigen).lng, 
+                      (coordsDestinoSim || coordsDestino).lat, 
+                      (coordsDestinoSim || coordsDestino).lng
+                    ) * 1.3).toFixed(1)} km
+                  </Text>
                   <TextInput 
-                    style={[styles.input, { backgroundColor: '#fff', color: '#000', marginBottom: 10 }]} 
+                    style={[styles.input, { backgroundColor: '#fff', color: '#000', marginBottom: 10, height: 40 }]} 
                     placeholder="Espera estimada (min) ej: 15" 
                     keyboardType="numeric" 
                     value={minutosEsperaSimulados} 
