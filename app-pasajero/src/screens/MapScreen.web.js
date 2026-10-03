@@ -58,8 +58,31 @@ export default function MapScreen({ route, navigation }) {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`¡El chofer ${data.chofer.nombre} ${data.chofer.apellido} está en camino!\nMóvil #${data.chofer.numero_movil} - ${data.chofer.vehiculo_modelo} (Patente: ${data.chofer.vehiculo_patente})`);
         setChoferAsignado(data.chofer);
-        if (data.viaje && data.viaje.costo_fijo && data.chofer.datos_pago) {
-          window.alert(`Pago Anticipado Requerido\n\nPor favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`);
+        let requierePagoAnticipado = false;
+        if (data.viaje && data.viaje.costo_fijo) {
+          requierePagoAnticipado = true;
+        } else if (data.viaje && data.viaje.origen_lat && data.viaje.origen_lng) {
+          const R = 6371; 
+          const lat1 = data.viaje.origen_lat;
+          const lon1 = data.viaje.origen_lng;
+          const lat2 = -33.044167; // Casilda
+          const lon2 = -61.168056;
+          const dLat = (lat2 - lat1) * (Math.PI / 180);
+          const dLon = (lon2 - lon1) * (Math.PI / 180);
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2); 
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+          const dist = R * c;
+          
+          if (dist > 15) { // Más de 15km de Casilda
+            requierePagoAnticipado = true;
+          }
+        }
+
+        if (requierePagoAnticipado && data.chofer.datos_pago) {
+          window.alert(`Pago Anticipado Requerido\n\nComo tu viaje es de larga distancia o fuera de la ciudad, se requiere pago anticipado.\nPor favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`);
         }
         try {
           const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');

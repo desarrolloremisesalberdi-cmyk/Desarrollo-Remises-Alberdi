@@ -156,10 +156,22 @@ export default function MapScreen({ route, navigation }) {
         setChoferAsignado(data.chofer);
         Vibration.vibrate(500);
         
-        if (data.viaje && data.viaje.costo_fijo && data.chofer.datos_pago) {
+        let requierePagoAnticipado = false;
+        if (data.viaje && data.viaje.costo_fijo) {
+          requierePagoAnticipado = true;
+        } else if (data.viaje && data.viaje.origen_lat && data.viaje.origen_lng) {
+          const CASILDA_LAT = -33.044167;
+          const CASILDA_LNG = -61.168056;
+          const dist = calcularDistancia(data.viaje.origen_lat, data.viaje.origen_lng, CASILDA_LAT, CASILDA_LNG);
+          if (dist > 15) { // Más de 15km de Casilda
+            requierePagoAnticipado = true;
+          }
+        }
+
+        if (requierePagoAnticipado && data.chofer.datos_pago) {
           Alert.alert(
             'Pago Anticipado Requerido',
-            `Por favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`
+            `Como tu viaje es de larga distancia o fuera de la ciudad, se requiere pago anticipado.\nPor favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`
           );
         }
       }
