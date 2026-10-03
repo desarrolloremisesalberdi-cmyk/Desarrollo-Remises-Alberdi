@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, TextInput, ActivityIndicator } from 'react-native-web';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, TextInput, ActivityIndicator, Modal, ScrollView } from 'react-native-web';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { io } from 'socket.io-client';
 
@@ -11,6 +11,9 @@ export default function MapScreen({ route, navigation }) {
   const [estadoViaje, setEstadoViaje] = useState(null);
   const [choferAsignado, setChoferAsignado] = useState(null);
   const [mensajeEspera, setMensajeEspera] = useState(null);
+  
+  const [modalLargaDistancia, setModalLargaDistancia] = useState(false);
+  const [destinosFijos, setDestinosFijos] = useState([]);
 
   
   const [origenTexto, setOrigenTexto] = useState('');
@@ -23,11 +26,25 @@ export default function MapScreen({ route, navigation }) {
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
+    const fetchDestinosFijos = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/destinos_fijos`);
+        const data = await response.json();
+        if (data.success) setDestinosFijos(data.destinos);
+      } catch (e) {
+        console.log(e);
+      }
+    };
+    fetchDestinosFijos();
+
     socket.on('ride_accepted', (data) => {
       // Si el viaje aceptado corresponde a este pasajero
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`¡El chofer ${data.chofer.nombre} ${data.chofer.apellido} está en camino!\nMóvil #${data.chofer.numero_movil} - ${data.chofer.vehiculo_modelo} (Patente: ${data.chofer.vehiculo_patente})`);
         setChoferAsignado(data.chofer);
+        if (data.viaje && data.viaje.costo_fijo && data.chofer.datos_pago) {
+          window.alert(`Pago Anticipado Requerido\n\nPor favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`);
+        }
         try {
           const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
           audio.play();
@@ -150,6 +167,41 @@ export default function MapScreen({ route, navigation }) {
     }
   };
 
+  const pedirLargaDistancia = async (destino) => {
+    if (!user.id) {
+      alert('Error: No estás logueado en la base de datos.');
+      return;
+    }
+    setModalLargaDistancia(false);
+    setSolicitando(true);
+    try {
+      const response = await fetch(`${API_URL}/api/viajes/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario_id: user.id,
+          origen_lat: coordsOrigen ? coordsOrigen.lat : -33.044167,
+          origen_lng: coordsOrigen ? coordsOrigen.lng : -61.168056,
+          destino_lat: coordsDestino ? coordsDestino.lat : -33.044167,
+          destino_lng: coordsDestino ? coordsDestino.lng : -61.168056,
+          destino_fijo_id: destino.id,
+          costo_fijo: destino.precio
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setEstadoViaje(`¡Viaje a ${destino.nombre} solicitado! Esperando a que un chofer acepte...`);
+        socket.emit('request_ride_direct', data.viaje);
+      } else {
+        alert('Error al solicitar viaje de larga distancia');
+      }
+    } catch (error) {
+      alert('Error de conexión con el servidor');
+    } finally {
+      setSolicitando(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
@@ -227,6 +279,14 @@ export default function MapScreen({ route, navigation }) {
             >
               {solicitando ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Pedir Taxi Ahora</Text>}
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#4f46e5', marginTop: 10 }]} 
+              onPress={() => setModalLargaDistancia(true)}
+              disabled={solicitando}
+            >
+              <Text style={styles.buttonText}>Simular Costos / Larga Distancia</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -248,6 +308,39 @@ export default function MapScreen({ route, navigation }) {
           </TouchableOpacity>
         )}
       </View>
+
+      <Modal visible={modalLargaDistancia} animationType="slide" transparent={true}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: '90%', maxWidth: 500, backgroundColor: theme.cardBg, borderRadius: 20, padding: 25, maxHeight: '80%' }}>
+            <Text style={[styles.title, { color: theme.text, textAlign: 'center', marginBottom: 10 }]}>Simulador / Destinos</Text>
+            <Text style={{ color: theme.text, marginBottom: 20, textAlign: 'center' }}>
+              Seleccione un destino frecuente para ver el costo congelado y pedir su viaje (Requiere pago anticipado):
+            </Text>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {destinosFijos.map((destino) => (
+                <TouchableOpacity 
+                  key={destino.id} 
+                  style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                  onPress={() => pedirLargaDistancia(destino)}
+                >
+                  <Text style={{ color: theme.text, fontSize: 16 }}>{destino.nombre}</Text>
+                  <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 16 }}>${destino.precio}</Text>
+                </TouchableOpacity>
+              ))}
+              {destinosFijos.length === 0 && (
+                <Text style={{ color: theme.text, textAlign: 'center', marginTop: 20 }}>No hay destinos disponibles</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#ef4444', marginTop: 20 }]} 
+              onPress={() => setModalLargaDistancia(false)}
+            >
+              <Text style={styles.buttonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
