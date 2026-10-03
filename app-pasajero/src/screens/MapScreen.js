@@ -14,6 +14,7 @@ export default function MapScreen({ route, navigation }) {
   const [estadoViaje, setEstadoViaje] = useState(null);
   const [choferAsignado, setChoferAsignado] = useState(null);
   const [mensajeEspera, setMensajeEspera] = useState(null);
+  const [paymentData, setPaymentData] = useState(null);
   
   const [modalLargaDistancia, setModalLargaDistancia] = useState(false);
   const [destinosFijos, setDestinosFijos] = useState([]);
@@ -143,6 +144,32 @@ export default function MapScreen({ route, navigation }) {
     }
   };
 
+  const handlePayment = async (metodo) => {
+    if (!paymentData) return;
+    try {
+      const response = await fetch(`${API_URL}/api/viajes/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: paymentData.viaje_id,
+          metodo_pago: metodo
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPaymentData(null);
+        setEstadoViaje(null);
+        setChoferAsignado(null);
+        setSolicitando(false);
+        Alert.alert('Viaje Finalizado', 'Gracias por viajar con Taxis Alberdi.');
+      } else {
+        Alert.alert('Error', 'No se pudo registrar el pago');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Error de conexión');
+    }
+  };
+
   useEffect(() => {
     const fetchDestinosFijos = async () => {
       try {
@@ -204,6 +231,11 @@ export default function MapScreen({ route, navigation }) {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`✅ Viaje finalizado.\nDistancia: ${data.distancia.toFixed(2)} km\n\n💰 Total a pagar: $${data.monto}`);
         setMensajeEspera(null);
+        setPaymentData({
+          viaje_id: data.viaje_id,
+          monto: data.monto,
+          datos_pago: data.datos_pago || 'No especificado'
+        });
         Vibration.vibrate(1000);
       }
     });
@@ -492,6 +524,41 @@ export default function MapScreen({ route, navigation }) {
             >
               <Text style={styles.buttonText}>Entendido</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal visible={!!paymentData} transparent={true} animationType="slide">
+        <View style={{flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.8)'}}>
+          <View style={{margin: 20, backgroundColor: theme.cardBg, borderRadius: 12, padding: 20, alignItems: 'center'}}>
+            <Text style={{fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 10}}>Viaje Finalizado</Text>
+            <Text style={{fontSize: 18, color: theme.text, marginBottom: 20}}>Monto a pagar: <Text style={{fontWeight: 'bold', color: '#10b981'}}>${paymentData?.monto}</Text></Text>
+            
+            <Text style={{fontSize: 16, color: theme.text, marginBottom: 15, textAlign: 'center'}}>Por favor, selecciona tu método de pago:</Text>
+            
+            <View style={{width: '100%', marginBottom: 20}}>
+              <View style={{backgroundColor: '#1f2937', padding: 15, borderRadius: 8, marginBottom: 10}}>
+                <Text style={{color: '#9ca3af', fontSize: 14, marginBottom: 5}}>Opción 1: Transferencia</Text>
+                <Text style={{color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 10}}>Alias / CBU: {paymentData?.datos_pago}</Text>
+                <TouchableOpacity 
+                  style={{backgroundColor: '#3b82f6', padding: 12, borderRadius: 6, alignItems: 'center'}}
+                  onPress={() => handlePayment('transferencia')}
+                >
+                  <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>Ya transferí</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{backgroundColor: '#1f2937', padding: 15, borderRadius: 8}}>
+                <Text style={{color: '#9ca3af', fontSize: 14, marginBottom: 5}}>Opción 2: Efectivo</Text>
+                <TouchableOpacity 
+                  style={{backgroundColor: '#10b981', padding: 12, borderRadius: 6, alignItems: 'center'}}
+                  onPress={() => handlePayment('efectivo')}
+                >
+                  <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>Pago en Efectivo</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>

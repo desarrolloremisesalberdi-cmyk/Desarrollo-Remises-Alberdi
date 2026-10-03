@@ -468,6 +468,9 @@ app.post('/api/viajes/finish', async (req, res) => {
     const userRes = await db.query('SELECT es_jubilado FROM usuarios WHERE id = $1', [viaje.usuario_id]);
     const esJubilado = userRes.rows.length > 0 ? userRes.rows[0].es_jubilado : false;
 
+    const choferRes = await db.query('SELECT datos_pago FROM choferes WHERE id = $1', [chofer_id]);
+    const datosPagoChofer = choferRes.rows.length > 0 ? choferRes.rows[0].datos_pago : '';
+
     // 2. Obtener Tarifas actuales
     const tarifasRes = await db.query('SELECT * FROM tarifas ORDER BY id DESC LIMIT 1');
     const tarifas = tarifasRes.rows[0];
@@ -521,17 +524,36 @@ app.post('/api/viajes/finish', async (req, res) => {
       [viajeActualizado.chofer_id]
     );
 
-    // Avisar al pasajero del costo final
+    // Avisar al pasajero del costo final y los datos de pago
     io.emit('ride_finished', {
       viaje_id: viaje_id,
       pasajero_id: viajeActualizado.usuario_id,
       monto: montoCalculado,
-      distancia: distanciaKm
+      distancia: distanciaKm,
+      datos_pago: datosPagoChofer
     });
 
     res.json({ success: true, viaje: viajeActualizado });
   } catch (error) {
     console.error('Error al finalizar viaje:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Endpoint para que el pasajero registre el método de pago y cierre el modal
+app.post('/api/viajes/pay', async (req, res) => {
+  const { viaje_id, metodo_pago } = req.body;
+  try {
+    const result = await db.query(
+      `UPDATE viajes SET metodo_pago = $1 WHERE id = $2 RETURNING *`,
+      [metodo_pago, viaje_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Viaje no encontrado' });
+    }
+    res.json({ success: true, viaje: result.rows[0] });
+  } catch (error) {
+    console.error('Error al registrar pago:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });
