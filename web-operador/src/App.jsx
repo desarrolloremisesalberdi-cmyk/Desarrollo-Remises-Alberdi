@@ -58,9 +58,9 @@ function DashboardMap() {
 
   // Calcular totales reales
   const driversList = Object.values(activeDrivers);
-  const autosLibres = driversList.filter(d => d.isOnline).length;
-  const autosOcupados = driversList.filter(d => d.estado === 'ocupado').length;
-  const autosDesconectados = driversList.length - autosLibres - autosOcupados;
+  const autosLibres = driversList.filter(d => d.isOnline && d.estado !== 'ocupado').length;
+  const autosOcupados = driversList.filter(d => d.isOnline && d.estado === 'ocupado').length;
+  const autosDesconectados = driversList.filter(d => !d.isOnline).length;
 
   return (
     <main className="content">
@@ -75,7 +75,20 @@ function DashboardMap() {
             attribution='&copy; <a href="https://www.google.com/intl/en-US_US/help/terms_maps.html">Google Maps</a>'
           />
           {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng))).map(driver => {
-            const borderColor = driver.isOnline ? '#10b981' : '#ef4444';
+            const isLibre = driver.isOnline && driver.estado !== 'ocupado';
+            const isOcupado = driver.isOnline && driver.estado === 'ocupado';
+            
+            let borderColor = '#9ca3af'; // Gris (Desconectado)
+            let statusText = 'Desconectado (Gris)';
+            
+            if (isLibre) {
+              borderColor = '#10b981'; // Verde (Libre)
+              statusText = 'Auto Libre (Verde)';
+            } else if (isOcupado) {
+              borderColor = '#ef4444'; // Rojo (Ocupado)
+              statusText = 'Auto Ocupado (Rojo)';
+            }
+
             const imageUrl = driver.foto_url || `https://ui-avatars.com/api/?name=C&background=333&color=fff`;
             const iconHtml = `
               <div style="
@@ -103,7 +116,7 @@ function DashboardMap() {
                     <img src={imageUrl} alt="Chofer" style={{ width: 60, height: 60, borderRadius: '50%', marginBottom: 5 }} />
                     <br />
                     <strong>Móvil #{driver.movil}</strong><br/>
-                    {driver.isOnline ? 'Auto Libre (Verde)' : 'Auto Ocupado (Rojo)'} <br/>
+                    {statusText} <br/>
                     DNI: {driver.dni}
                   </div>
                 </Popup>
