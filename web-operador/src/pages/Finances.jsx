@@ -6,6 +6,7 @@ const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 export default function Finances() {
   const [filter, setFilter] = useState('hoy');
   const [trips, setTrips] = useState([]);
+  const [tarifas, setTarifas] = useState(null);
 
   useEffect(() => {
     fetch(`${API_URL}/api/finanzas/admin`)
@@ -16,6 +17,15 @@ export default function Finances() {
         }
       })
       .catch(err => console.error("Error fetching finances:", err));
+
+    fetch(`${API_URL}/api/tarifas`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setTarifas(data.tarifas);
+        }
+      })
+      .catch(err => console.error("Error fetching tarifas:", err));
   }, []);
 
   // Filtrar los cancelados para la suma total
@@ -53,7 +63,7 @@ export default function Finances() {
         <div className="kpi-card cash">
           <div className="kpi-icon"><Banknote size={24} /></div>
           <div className="kpi-data">
-            <h3>Comisión Agencia (15%)</h3>
+            <h3>Comisión Agencia {tarifas ? `(${tarifas.porcentaje_comision_agencia}%)` : ''}</h3>
             <h2>${totalCommission.toLocaleString('es-AR', {minimumFractionDigits: 2})}</h2>
             <p>A rendir por choferes</p>
           </div>
