@@ -33,6 +33,17 @@ export default function MainScreen({ route, navigation }) {
     let watchId = null;
 
     if (isOnline || activeTrip) {
+      // Send immediate update so operator sees the change instantly without waiting for GPS
+      socket.emit('update_location', {
+        chofer_id: chofer.id || 'sim-1',
+        dni: chofer.dni || '31861718',
+        movil: chofer.numero_movil || '14',
+        lat: location ? location.latitude : -33.045,
+        lng: location ? location.longitude : -61.168,
+        isOnline: true,
+        foto_url: chofer.foto_url || null
+      });
+
       if ('geolocation' in navigator) {
         watchId = navigator.geolocation.watchPosition(
           (position) => {
@@ -97,6 +108,7 @@ export default function MainScreen({ route, navigation }) {
           <TouchableOpacity 
             style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
             onPress={() => {
+              socket.emit('manual_disconnect', { chofer_id: chofer.id || chofer.dni });
               if (window.localStorage) window.localStorage.removeItem('chofer_user');
               navigation.replace('Login');
             }}

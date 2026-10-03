@@ -738,6 +738,22 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('toggle_espera', data);
   });
 
+  socket.on('manual_disconnect', async (data) => {
+    const chofer_id = data.chofer_id;
+    if (chofer_id) {
+      try {
+        await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo' WHERE id = $1", [chofer_id]);
+        socket.broadcast.emit('driver_disconnected', { chofer_id });
+      } catch (e) {
+        console.error('Error al desconectar chofer manualmente:', e);
+      }
+      // Buscar en conectedDrivers si el socket corresponde
+      for (const [sId, cId] of Object.entries(connectedDrivers)) {
+        if (cId == chofer_id) delete connectedDrivers[sId];
+      }
+    }
+  });
+
   socket.on('disconnect', async () => {
     console.log(`Usuario desconectado: ${socket.id}`);
     const chofer_id = connectedDrivers[socket.id];
