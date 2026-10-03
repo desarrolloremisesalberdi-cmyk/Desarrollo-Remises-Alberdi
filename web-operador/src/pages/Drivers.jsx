@@ -23,7 +23,7 @@ export default function Drivers() {
             dni: ch.dni,
             movilStr: ch.numero_movil ? ch.numero_movil.toString().padStart(2, '0') : 'N/A',
             licencia_vencimiento_str: ch.licencia_vencimiento ? new Date(ch.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
-            estado_str: ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido',
+            estado_str: !ch.is_online ? 'Desconectado' : (ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido'),
             vehiculo_str: ch.vehiculo_modelo || 'Vehículo Genérico',
             suspendido: ch.suspendido || false
           }));
@@ -72,7 +72,7 @@ export default function Drivers() {
               dni: data.chofer.dni,
               movilStr: data.chofer.numero_movil ? data.chofer.numero_movil.toString().padStart(2, '0') : 'N/A',
               licencia_vencimiento_str: data.chofer.licencia_vencimiento ? new Date(data.chofer.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
-              estado_str: data.chofer.estado ? data.chofer.estado.charAt(0).toUpperCase() + data.chofer.estado.slice(1) : 'Desconocido',
+              estado_str: !data.chofer.is_online ? 'Desconectado' : (data.chofer.estado ? data.chofer.estado.charAt(0).toUpperCase() + data.chofer.estado.slice(1) : 'Desconocido'),
               vehiculo_str: data.chofer.vehiculo_modelo || 'Vehículo Genérico',
               suspendido: data.chofer.suspendido || false
             };
