@@ -54,7 +54,10 @@ export default function MainScreen({ route, navigation }) {
           </TouchableOpacity>
           <TouchableOpacity 
             style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
-            onPress={() => navigation.replace('Login')}
+            onPress={() => {
+              if (socket) socket.emit('manual_disconnect', { chofer_id: chofer.id || chofer.dni });
+              navigation.replace('Login');
+            }}
           >
             <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
           </TouchableOpacity>
@@ -73,6 +76,18 @@ export default function MainScreen({ route, navigation }) {
           Alert.alert('Error', 'Se requiere permiso de ubicación para trabajar');
           setIsOnline(false);
           return;
+        }
+
+        // Send immediate pulse before waiting for GPS lock
+        if (socket && chofer) {
+          socket.emit('update_location', {
+            chofer_id: chofer.id,
+            dni: chofer.dni,
+            isOnline: true,
+            lat: location ? location.latitude : -33.044167,
+            lng: location ? location.longitude : -61.168056,
+            foto_url: chofer.foto_url || null
+          });
         }
 
         subscription = await Location.watchPositionAsync(
