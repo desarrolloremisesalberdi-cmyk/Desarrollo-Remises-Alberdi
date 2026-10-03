@@ -173,6 +173,8 @@ export default function Drivers() {
                   nombre: selectedDriver.nombre || '',
                   apellido: selectedDriver.apellido || '',
                   dni: selectedDriver.dni || '',
+                  telefono: selectedDriver.telefono || '',
+                  domicilio: selectedDriver.domicilio || '',
                   numero_movil: selectedDriver.numero_movil || '',
                   vehiculo_modelo: selectedDriver.vehiculo_modelo || '',
                   vehiculo_patente: selectedDriver.vehiculo_patente || '',
@@ -239,6 +241,14 @@ export default function Drivers() {
               <div className="form-group">
                 <label>Número de Móvil</label>
                 <input type="number" value={editingDriver.numero_movil} onChange={e => setEditingDriver({...editingDriver, numero_movil: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group">
+                <label>Teléfono</label>
+                <input type="tel" value={editingDriver.telefono} onChange={e => setEditingDriver({...editingDriver, telefono: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Domicilio</label>
+                <input type="text" value={editingDriver.domicilio} onChange={e => setEditingDriver({...editingDriver, domicilio: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
               </div>
               <div className="form-group">
                 <label>Modelo de Vehículo</label>
