@@ -231,7 +231,7 @@ app.post('/api/viajes/request', async (req, res) => {
 // ================= DESTINOS FIJOS =================
 app.get('/api/destinos_fijos', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM destinos_fijos ORDER BY nombre ASC');
+    const result = await db.query('SELECT * FROM destinos_fijos ORDER BY nombre_destino ASC');
     res.json({ success: true, destinos: result.rows });
   } catch (error) {
     console.error('Error al obtener destinos fijos:', error);
