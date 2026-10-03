@@ -744,6 +744,7 @@ io.on('connection', (socket) => {
     if (chofer_id) {
       try {
         await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo' WHERE id = $1", [chofer_id]);
+        socket.broadcast.emit('driver_disconnected', { chofer_id });
       } catch (e) {
         console.error('Error al desconectar chofer:', e);
       }

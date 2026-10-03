@@ -42,17 +42,40 @@ function DashboardMap() {
 
     // 2. Escuchar pulsos en tiempo real
     socket.on('driver_location', (data) => {
-      setActiveDrivers((prev) => ({
-        ...prev,
-        [data.chofer_id]: {
-          ...prev[data.chofer_id], // Preserve other static info like estado
-          ...data
-        }
-      }));
+      setActiveDrivers((prev) => {
+        const oldDriver = prev[data.chofer_id] || {};
+        const oldEstado = oldDriver.estado || 'inactivo';
+        // Si la app móvil envía isOnline: true, está libre. Si envía false, está ocupado/inactivo.
+        const newEstado = data.isOnline ? 'libre' : (oldEstado === 'ocupado' ? 'ocupado' : 'inactivo');
+        
+        return {
+          ...prev,
+          [data.chofer_id]: {
+            ...oldDriver, 
+            ...data,
+            isOnline: true, // Si recibimos pulso, sabemos fehacientemente que la app está abierta
+            estado: newEstado
+          }
+        };
+      });
+    });
+
+    socket.on('driver_disconnected', (data) => {
+      setActiveDrivers((prev) => {
+        if (!prev[data.chofer_id]) return prev;
+        return {
+          ...prev,
+          [data.chofer_id]: {
+            ...prev[data.chofer_id],
+            isOnline: false
+          }
+        };
+      });
     });
 
     return () => {
       socket.off('driver_location');
+      socket.off('driver_disconnected');
     };
   }, []);
 
