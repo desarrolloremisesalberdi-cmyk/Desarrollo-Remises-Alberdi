@@ -168,7 +168,7 @@ app.post('/api/users/forgot-password', async (req, res) => {
     const mailOptions = {
       from: transporter.options.auth.user,
       to: email,
-      subject: 'Recuperación de Contraseña - Remises Alberdi',
+      subject: 'Recuperación de Contraseña - Taxis Alberdi',
       text: `Hola ${user.nombre}, tu código para restablecer la contraseña es: ${resetToken}. Ingrésalo en la aplicación para cambiar tu clave.`
     };
 

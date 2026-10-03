@@ -77,7 +77,7 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <Text style={[styles.title, { color: theme.text }]}>Remises Alberdi</Text>
+      <Text style={[styles.title, { color: theme.text }]}>Taxis Alberdi</Text>
       
       <TextInput 
         style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]}
