@@ -74,7 +74,7 @@ function DashboardMap() {
             url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
             attribution='&copy; <a href="https://www.google.com/intl/en-US_US/help/terms_maps.html">Google Maps</a>'
           />
-          {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng))).map(driver => {
+          {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng)) && d.isOnline).map(driver => {
             const isLibre = driver.isOnline && driver.estado !== 'ocupado';
             const isOcupado = driver.isOnline && driver.estado === 'ocupado';
             
