@@ -253,6 +253,21 @@ app.post('/api/destinos_fijos', async (req, res) => {
   }
 });
 
+app.put('/api/destinos_fijos/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, precio } = req.body;
+  try {
+    const result = await db.query(
+      'UPDATE destinos_fijos SET nombre_destino = $1, precio_fijo = $2 WHERE id = $3 RETURNING *',
+      [nombre, precio, id]
+    );
+    res.json({ success: true, destino: result.rows[0] });
+  } catch (error) {
+    console.error('Error al actualizar destino fijo:', error);
+    res.status(500).json({ success: false, error: 'Error al actualizar destino' });
+  }
+});
+
 app.delete('/api/destinos_fijos/:id', async (req, res) => {
   const { id } = req.params;
   try {

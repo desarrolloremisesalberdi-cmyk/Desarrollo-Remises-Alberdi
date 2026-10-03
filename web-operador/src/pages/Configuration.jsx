@@ -18,6 +18,7 @@ export default function Configuration() {
   
   const [destinos, setDestinos] = useState([]);
   const [nuevoDestino, setNuevoDestino] = useState({ nombre: '', precio: '' });
+  const [editingDestino, setEditingDestino] = useState(null);
 
   useEffect(() => {
     fetchTarifas();
@@ -119,6 +120,24 @@ export default function Configuration() {
     }
   };
 
+  const handleUpdateDestino = async (id, nombre, precio) => {
+    if (!nombre || !precio) return;
+    try {
+      const res = await fetch(`https://desarrollo-remises-alberdi.onrender.com/api/destinos_fijos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, precio })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDestinos(destinos.map(d => d.id === id ? data.destino : d));
+        setEditingDestino(null);
+      }
+    } catch (error) {
+      alert('Error al actualizar destino');
+    }
+  };
+
   if (loading) return <div className="content"><h2>Cargando configuración...</h2></div>;
 
   return (
@@ -189,12 +208,26 @@ export default function Configuration() {
         <h2 style={{ marginBottom: '20px', borderBottom: '1px solid #374151', paddingBottom: '10px' }}>Destinos Fijos (Larga Distancia)</h2>
         <ul style={{ listStyle: 'none', padding: 0, marginBottom: '20px' }}>
           {destinos.map(d => (
-            <li key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #374151' }}>
-              <span>{d.nombre_destino}</span>
-              <span>
-                <b style={{ marginRight: '15px' }}>${d.precio_fijo}</b>
-                <button onClick={() => handleDeleteDestino(d.id)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>X</button>
-              </span>
+            <li key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #374151' }}>
+              {editingDestino?.id === d.id ? (
+                <>
+                  <input type="text" value={editingDestino.nombre} onChange={(e) => setEditingDestino({ ...editingDestino, nombre: e.target.value })} style={{ flex: 1, padding: '5px', marginRight: '10px', borderRadius: '5px', border: '1px solid #374151', background: '#111827', color: '#fff' }} />
+                  <input type="number" step="0.01" value={editingDestino.precio} onChange={(e) => setEditingDestino({ ...editingDestino, precio: e.target.value })} style={{ width: '100px', padding: '5px', marginRight: '10px', borderRadius: '5px', border: '1px solid #374151', background: '#111827', color: '#fff' }} />
+                  <span>
+                    <button onClick={() => handleUpdateDestino(d.id, editingDestino.nombre, editingDestino.precio)} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', marginRight: '5px' }}>✓</button>
+                    <button onClick={() => setEditingDestino(null)} style={{ background: '#6b7280', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>X</button>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>{d.nombre_destino}</span>
+                  <span>
+                    <b style={{ marginRight: '15px' }}>${d.precio_fijo}</b>
+                    <button onClick={() => setEditingDestino({ id: d.id, nombre: d.nombre_destino, precio: d.precio_fijo })} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', marginRight: '5px' }}>✎</button>
+                    <button onClick={() => handleDeleteDestino(d.id)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>X</button>
+                  </span>
+                </>
+              )}
             </li>
           ))}
         </ul>
