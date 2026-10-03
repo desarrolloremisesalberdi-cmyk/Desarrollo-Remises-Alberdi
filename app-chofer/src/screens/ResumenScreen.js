@@ -60,7 +60,7 @@ export default function ResumenScreen({ route, navigation }) {
               <Text style={{ color: '#10b981', fontSize: 18, fontWeight: 'bold' }}>${totalRecaudado.toFixed(2)}</Text>
             </View>
             <View style={styles.row}>
-              <Text style={{ color: theme.text, fontSize: 16 }}>Comisión Agencia (15%):</Text>
+              <Text style={{ color: theme.text, fontSize: 16 }}>Comisión Agencia:</Text>
               <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: 'bold' }}>${totalComision.toFixed(2)}</Text>
             </View>
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
