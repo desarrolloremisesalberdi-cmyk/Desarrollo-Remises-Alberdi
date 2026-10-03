@@ -536,7 +536,7 @@ app.post('/api/viajes/finish', async (req, res) => {
     res.json({ success: true, viaje: viajeActualizado });
   } catch (error) {
     console.error('Error al finalizar viaje:', error);
-    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    res.status(500).json({ success: false, error: error.message || 'Error interno del servidor' });
   }
 });
 
