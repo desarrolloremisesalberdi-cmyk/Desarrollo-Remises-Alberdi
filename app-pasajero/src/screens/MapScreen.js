@@ -25,6 +25,9 @@ export default function MapScreen({ route, navigation }) {
   const [coordsDestinoSim, setCoordsDestinoSim] = useState(null);
   
   const [modalCostos, setModalCostos] = useState(false);
+  const [modalHistorial, setModalHistorial] = useState(false);
+  const [historialViajes, setHistorialViajes] = useState([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
@@ -167,6 +170,23 @@ export default function MapScreen({ route, navigation }) {
       }
     } catch (error) {
       Alert.alert('Error', 'Error de conexión');
+    }
+  };
+
+  const fetchHistorial = async () => {
+    if (!user.id) return;
+    setLoadingHistorial(true);
+    setModalHistorial(true);
+    try {
+      const response = await fetch(`${API_URL}/api/viajes/pasajero/${user.id}`);
+      const data = await response.json();
+      if (data.success) {
+        setHistorialViajes(data.viajes);
+      }
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoadingHistorial(false);
     }
   };
 
@@ -361,6 +381,14 @@ export default function MapScreen({ route, navigation }) {
               disabled={solicitando}
             >
               <Text style={styles.buttonText}>Simular Costos / Larga Distancia</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#64748b', marginTop: 10 }]} 
+              onPress={fetchHistorial}
+              disabled={solicitando}
+            >
+              <Text style={styles.buttonText}>Mi Historial de Viajes</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -559,6 +587,44 @@ export default function MapScreen({ route, navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Historial Modal */}
+      <Modal visible={modalHistorial} transparent={true} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: '90%', maxWidth: 500, backgroundColor: theme.cardBg, borderRadius: 20, padding: 25, maxHeight: '90%' }}>
+            <Text style={[styles.title, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>Mi Historial de Viajes</Text>
+            
+            {loadingHistorial ? (
+              <ActivityIndicator size="large" color={theme.accent} />
+            ) : (
+              <ScrollView style={{ maxHeight: 400 }}>
+                {historialViajes.length === 0 ? (
+                  <Text style={{ color: theme.placeholder, textAlign: 'center', marginTop: 20 }}>No tienes viajes registrados aún.</Text>
+                ) : (
+                  historialViajes.map(viaje => (
+                    <View key={viaje.id} style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 10 }}>
+                      <Text style={{ color: theme.text, fontWeight: 'bold' }}>{new Date(viaje.fecha || viaje.hora_fin).toLocaleString()}</Text>
+                      <Text style={{ color: theme.text, marginTop: 5 }}>Chofer: {viaje.chofer_nombre} {viaje.chofer_apellido}</Text>
+                      <Text style={{ color: theme.text }}>Vehículo: {viaje.vehiculo_modelo} - {viaje.vehiculo_patente}</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+                        <Text style={{ color: theme.text }}>Monto:</Text>
+                        <Text style={{ color: '#10b981', fontWeight: 'bold' }}>${viaje.monto_calculado}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#ef4444', marginTop: 20 }]} 
+              onPress={() => setModalHistorial(false)}
+            >
+              <Text style={styles.buttonText}>Cerrar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

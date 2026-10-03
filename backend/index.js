@@ -634,6 +634,24 @@ app.post('/api/viajes/force-close', async (req, res) => {
   }
 });
 
+// Obtener historial de viajes del pasajero
+app.get('/api/viajes/pasajero/:id', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT v.*, c.nombre as chofer_nombre, c.apellido as chofer_apellido, c.vehiculo_modelo, c.vehiculo_patente 
+       FROM viajes v
+       LEFT JOIN choferes c ON v.chofer_id = c.id
+       WHERE v.usuario_id = $1 AND v.estado = 'finalizado'
+       ORDER BY v.hora_fin DESC LIMIT 50`,
+      [req.params.id]
+    );
+    res.json({ success: true, viajes: result.rows });
+  } catch (error) {
+    console.error('Error obteniendo historial de pasajero:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
 // Obtener choferes activos (online)
 app.get('/api/choferes/activos', async (req, res) => {
   try {
