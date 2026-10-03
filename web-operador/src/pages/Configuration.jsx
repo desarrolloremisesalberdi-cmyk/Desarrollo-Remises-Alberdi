@@ -9,7 +9,9 @@ export default function Configuration() {
     precio_100m_jubilados: '',
     bajada_bandera_nocturna: '',
     precio_100m_nocturna: '',
-    porcentaje_comision_agencia: ''
+    porcentaje_comision_agencia: '',
+    precio_espera_hora: '',
+    precio_km_extra: ''
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,7 +49,9 @@ export default function Configuration() {
           precio_100m_jubilados: data.tarifas.precio_100m_jubilados,
           bajada_bandera_nocturna: data.tarifas.bajada_bandera_nocturna,
           precio_100m_nocturna: data.tarifas.precio_100m_nocturna,
-          porcentaje_comision_agencia: data.tarifas.porcentaje_comision_agencia
+          porcentaje_comision_agencia: data.tarifas.porcentaje_comision_agencia,
+          precio_espera_hora: data.tarifas.precio_espera_hora,
+          precio_km_extra: data.tarifas.precio_km_extra
         });
       }
     } catch (error) {
@@ -157,6 +161,16 @@ export default function Configuration() {
             <input type="number" step="0.01" name="precio_100m_jubilados" value={tarifas.precio_100m_jubilados} onChange={handleChange} required />
           </div>
 
+          {/* Otros Costos */}
+          <div className="form-group">
+            <label>Hora de Espera ($)</label>
+            <input type="number" step="0.01" name="precio_espera_hora" value={tarifas.precio_espera_hora} onChange={handleChange} required />
+          </div>
+          <div className="form-group">
+            <label>Kilómetro Extra ($) (Interurbano)</label>
+            <input type="number" step="0.01" name="precio_km_extra" value={tarifas.precio_km_extra} onChange={handleChange} required />
+          </div>
+
           {/* Comisión */}
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>Porcentaje Comisión Agencia (%)</label>
@@ -176,9 +190,9 @@ export default function Configuration() {
         <ul style={{ listStyle: 'none', padding: 0, marginBottom: '20px' }}>
           {destinos.map(d => (
             <li key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #374151' }}>
-              <span>{d.nombre}</span>
+              <span>{d.nombre_destino}</span>
               <span>
-                <b style={{ marginRight: '15px' }}>${d.precio}</b>
+                <b style={{ marginRight: '15px' }}>${d.precio_fijo}</b>
                 <button onClick={() => handleDeleteDestino(d.id)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>X</button>
               </span>
             </li>

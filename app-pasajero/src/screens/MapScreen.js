@@ -22,6 +22,8 @@ export default function MapScreen({ route, navigation }) {
   
   const [coordsOrigenSim, setCoordsOrigenSim] = useState(null);
   const [coordsDestinoSim, setCoordsDestinoSim] = useState(null);
+  
+  const [modalCostos, setModalCostos] = useState(false);
 
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
@@ -227,12 +229,20 @@ export default function MapScreen({ route, navigation }) {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
-          style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
-          onPress={() => navigation.replace('Login')}
-        >
-          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+          <TouchableOpacity 
+            style={{ marginRight: 10, padding: 8, backgroundColor: '#3b82f6', borderRadius: 6 }} 
+            onPress={() => setModalCostos(true)}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Costos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={{ padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
+            onPress={() => navigation.replace('Login')}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
+          </TouchableOpacity>
+        </View>
       )
     });
   }, [navigation]);
@@ -430,6 +440,46 @@ export default function MapScreen({ route, navigation }) {
               onPress={() => setModalLargaDistancia(false)}
             >
               <Text style={styles.buttonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Tarifas Informativo */}
+      <Modal visible={modalCostos} animationType="slide" transparent={true}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: '90%', maxWidth: 500, backgroundColor: theme.cardBg, borderRadius: 20, padding: 25, maxHeight: '90%' }}>
+            <Text style={[styles.title, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>Tarifas Actuales</Text>
+            
+            <ScrollView style={{ maxHeight: 400 }}>
+              {tarifas ? (
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16, marginTop: 10 }}>Horario Diurno</Text>
+                  <Text style={{ color: theme.text }}>Bajada de bandera: ${tarifas.bajada_bandera_diurna}</Text>
+                  <Text style={{ color: theme.text }}>Cada 100 metros: ${tarifas.precio_100m_diurna}</Text>
+                  
+                  <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16, marginTop: 10 }}>Horario Nocturno / Feriados</Text>
+                  <Text style={{ color: theme.text }}>Bajada de bandera: ${tarifas.bajada_bandera_nocturna}</Text>
+                  <Text style={{ color: theme.text }}>Cada 100 metros: ${tarifas.precio_100m_nocturna}</Text>
+                  
+                  <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16, marginTop: 10 }}>Jubilados y Pensionados</Text>
+                  <Text style={{ color: theme.text }}>Bajada de bandera: ${tarifas.bajada_bandera_jubilados}</Text>
+                  <Text style={{ color: theme.text }}>Cada 100 metros: ${tarifas.precio_100m_jubilados}</Text>
+                  
+                  <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16, marginTop: 10 }}>Otros Costos</Text>
+                  <Text style={{ color: theme.text }}>Hora de Espera: ${tarifas.precio_espera_hora} (se fracciona cada 10 min)</Text>
+                  <Text style={{ color: theme.text }}>Kilómetro extra (fuera de ciudad): ${tarifas.precio_km_extra || 1100}</Text>
+                </View>
+              ) : (
+                <Text style={{ color: theme.text, textAlign: 'center' }}>Cargando tarifas...</Text>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#3b82f6', marginTop: 15 }]} 
+              onPress={() => setModalCostos(false)}
+            >
+              <Text style={styles.buttonText}>Entendido</Text>
             </TouchableOpacity>
           </View>
         </View>

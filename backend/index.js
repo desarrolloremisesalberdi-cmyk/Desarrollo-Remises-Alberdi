@@ -243,7 +243,7 @@ app.post('/api/destinos_fijos', async (req, res) => {
   const { nombre, precio } = req.body;
   try {
     const result = await db.query(
-      'INSERT INTO destinos_fijos (nombre, precio) VALUES ($1, $2) RETURNING *',
+      'INSERT INTO destinos_fijos (nombre_destino, precio_fijo) VALUES ($1, $2) RETURNING *',
       [nombre, precio]
     );
     res.json({ success: true, destino: result.rows[0] });
@@ -284,14 +284,15 @@ app.post('/api/tarifas', async (req, res) => {
     bajada_bandera_jubilados,
     precio_100m_jubilados,
     porcentaje_comision_agencia,
-    precio_espera_hora
+    precio_espera_hora,
+    precio_km_extra
   } = req.body;
   try {
     const result = await db.query(
       `INSERT INTO tarifas 
-      (bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, precio_espera_hora, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
-      [bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, precio_espera_hora || 0]
+      (bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, precio_espera_hora, precio_km_extra, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING *`,
+      [bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, precio_espera_hora || 0, precio_km_extra || 1100]
     );
     res.json({ success: true, tarifas: result.rows[0] });
   } catch (error) {
