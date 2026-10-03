@@ -17,6 +17,8 @@ export default function MapScreen({ route, navigation }) {
   
   const [modalLargaDistancia, setModalLargaDistancia] = useState(false);
   const [destinosFijos, setDestinosFijos] = useState([]);
+  const [tarifas, setTarifas] = useState(null);
+  const [minutosEsperaSimulados, setMinutosEsperaSimulados] = useState('');
 
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
@@ -35,6 +37,16 @@ export default function MapScreen({ route, navigation }) {
       Math.sin(dLon/2) * Math.sin(dLon/2); 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
     return R * c;
+  };
+
+  const calcularCostoSimulado = () => {
+    if (!tarifas || !coordsOrigen || !coordsDestino) return 0;
+    const dist = calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng) * 1.3;
+    const bajada = parseFloat(tarifas.bajada_bandera_diurna) || 0;
+    const precio100 = parseFloat(tarifas.precio_100m_diurna) || 0;
+    const espera = parseInt(minutosEsperaSimulados) || 0;
+    const costoEspera = (espera / 60) * (parseFloat(tarifas.precio_espera_hora) || 0);
+    return Math.round(bajada + (precio100 * (dist * 10)) + costoEspera);
   };
 
   // Google Places Autocomplete handle
@@ -121,6 +133,18 @@ export default function MapScreen({ route, navigation }) {
       }
     };
     fetchDestinosFijos();
+
+    const fetchTarifas = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/tarifas`);
+        const data = await response.json();
+        if (data.success) setTarifas(data.tarifas);
+      } catch (e) {
+        console.log(e);
+      }
+    };
+    fetchTarifas();
+
     socket.on('ride_accepted', (data) => {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`¡${data.chofer.nombre} está en camino!\nMóvil #${data.chofer.numero_movil}`);
@@ -294,8 +318,34 @@ export default function MapScreen({ route, navigation }) {
         onRequestClose={() => setModalLargaDistancia(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: theme.cardBg, borderRadius: 12, padding: 20, maxHeight: '80%' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 15, textAlign: 'center' }}>Destinos Larga Distancia</Text>
+          <View style={{ backgroundColor: theme.cardBg, borderRadius: 12, padding: 20, maxHeight: '90%' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 15, textAlign: 'center' }}>Simulador / Destinos</Text>
+            
+            <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 15, borderRadius: 10, marginBottom: 20 }}>
+              <Text style={{ color: theme.text, fontWeight: 'bold', marginBottom: 5 }}>Simulador (Origen a Destino)</Text>
+              {!coordsOrigen || !coordsDestino ? (
+                <Text style={{ color: '#ef4444', fontSize: 13 }}>Busca y selecciona tu origen y destino en el mapa para simular.</Text>
+              ) : (
+                <View>
+                  <Text style={{ color: theme.text, fontSize: 13, marginBottom: 10 }}>Distancia aprox: {(calcularDistancia(coordsOrigen.lat, coordsOrigen.lng, coordsDestino.lat, coordsDestino.lng) * 1.3).toFixed(1)} km</Text>
+                  <TextInput 
+                    style={[styles.input, { backgroundColor: '#fff', color: '#000', marginBottom: 10 }]} 
+                    placeholder="Espera estimada (min) ej: 15" 
+                    keyboardType="numeric" 
+                    value={minutosEsperaSimulados} 
+                    onChangeText={setMinutosEsperaSimulados} 
+                  />
+                  <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 18, textAlign: 'center' }}>
+                    Costo Estimado: ${calcularCostoSimulado()}
+                  </Text>
+                  <Text style={{ color: 'gray', fontSize: 11, textAlign: 'center', marginTop: 5 }}>*El costo final puede variar por la ruta real tomada.</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={{ color: theme.text, marginBottom: 10, fontWeight: 'bold', borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 15 }}>
+              O seleccione un destino fijo (Costo Congelado):
+            </Text>
             <ScrollView>
               {destinosFijos.map((destino) => (
                 <TouchableOpacity 
