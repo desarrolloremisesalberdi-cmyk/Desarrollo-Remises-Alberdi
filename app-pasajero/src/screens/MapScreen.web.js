@@ -497,6 +497,17 @@ export default function MapScreen({ route, navigation }) {
                   <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16, marginTop: 10 }}>Otros Costos</Text>
                   <Text style={{ color: theme.text }}>Hora de Espera: ${tarifas.precio_espera_hora} (se fracciona cada 10 min)</Text>
                   <Text style={{ color: theme.text }}>Kilómetro extra (fuera de ciudad): ${tarifas.precio_km_extra || 1100}</Text>
+                  
+                  {destinosFijos && destinosFijos.length > 0 && (
+                    <>
+                      <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16, marginTop: 15, marginBottom: 5 }}>Destinos Fijos (Larga Distancia)</Text>
+                      {destinosFijos.map(d => (
+                        <Text key={d.id} style={{ color: theme.text }}>
+                          • {d.nombre_destino}: ${d.precio_fijo}
+                        </Text>
+                      ))}
+                    </>
+                  )}
                 </View>
               ) : (
                 <Text style={{ color: theme.text, textAlign: 'center' }}>Cargando tarifas...</Text>
