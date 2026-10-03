@@ -10,6 +10,8 @@ export default function MapScreen({ route, navigation }) {
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);
   const [choferAsignado, setChoferAsignado] = useState(null);
+  const [mensajeEspera, setMensajeEspera] = useState(null);
+
   
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
@@ -48,6 +50,7 @@ export default function MapScreen({ route, navigation }) {
     socket.on('ride_finished', (data) => {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`✅ Viaje finalizado.\nDistancia: ${data.distancia.toFixed(2)} km\n\n💰 Total a pagar: $${data.monto}`);
+        setMensajeEspera(null);
         try {
           const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg');
           audio.play();
@@ -55,10 +58,21 @@ export default function MapScreen({ route, navigation }) {
       }
     });
 
+    socket.on('toggle_espera', (data) => {
+      if (data.pasajero_id === user.id) {
+        if (data.en_espera) {
+          setMensajeEspera(`El chofer está en espera... (${data.minutos} min)`);
+        } else {
+          setMensajeEspera(null);
+        }
+      }
+    });
+
     return () => {
       socket.off('ride_accepted');
       socket.off('ride_started');
       socket.off('ride_finished');
+      socket.off('toggle_espera');
     };
   }, [user.id]);
 
@@ -154,6 +168,11 @@ export default function MapScreen({ route, navigation }) {
               />
             )}
             <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
+            {mensajeEspera && (
+              <Text style={{ marginTop: 10, color: '#f59e0b', fontWeight: 'bold', textAlign: 'center' }}>
+                ⏳ {mensajeEspera}
+              </Text>
+            )}
           </View>
         )}
       </View>

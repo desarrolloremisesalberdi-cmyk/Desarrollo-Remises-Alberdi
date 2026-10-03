@@ -13,10 +13,26 @@ export default function Configuration() {
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  const [destinos, setDestinos] = useState([]);
+  const [nuevoDestino, setNuevoDestino] = useState({ nombre: '', precio: '' });
 
   useEffect(() => {
     fetchTarifas();
+    fetchDestinos();
   }, []);
+
+  const fetchDestinos = async () => {
+    try {
+      const res = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/destinos_fijos');
+      const data = await res.json();
+      if (data.success) {
+        setDestinos(data.destinos);
+      }
+    } catch (error) {
+      console.error("Error al cargar destinos fijos:", error);
+    }
+  };
 
   const fetchTarifas = async () => {
     setLoading(true);
@@ -64,6 +80,38 @@ export default function Configuration() {
       alert('Error de conexión');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddDestino = async (e) => {
+    e.preventDefault();
+    if (!nuevoDestino.nombre || !nuevoDestino.precio) return;
+    try {
+      const res = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/destinos_fijos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nuevoDestino)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDestinos([...destinos, data.destino]);
+        setNuevoDestino({ nombre: '', precio: '' });
+      }
+    } catch (error) {
+      alert('Error al agregar destino');
+    }
+  };
+
+  const handleDeleteDestino = async (id) => {
+    if (!window.confirm('¿Eliminar destino?')) return;
+    try {
+      const res = await fetch(`https://desarrollo-remises-alberdi.onrender.com/api/destinos_fijos/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setDestinos(destinos.filter(d => d.id !== id));
+      }
+    } catch (error) {
+      alert('Error al eliminar destino');
     }
   };
 
@@ -121,6 +169,28 @@ export default function Configuration() {
           {saving ? 'Guardando...' : 'Guardar Cambios'}
         </button>
       </form>
+
+      {/* Destinos Fijos Section */}
+      <div className="finance-summary" style={{ display: 'block', maxWidth: '800px', background: '#1f2937', padding: '20px', borderRadius: '12px', marginTop: '20px' }}>
+        <h2 style={{ marginBottom: '20px', borderBottom: '1px solid #374151', paddingBottom: '10px' }}>Destinos Fijos (Larga Distancia)</h2>
+        <ul style={{ listStyle: 'none', padding: 0, marginBottom: '20px' }}>
+          {destinos.map(d => (
+            <li key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #374151' }}>
+              <span>{d.nombre}</span>
+              <span>
+                <b style={{ marginRight: '15px' }}>${d.precio}</b>
+                <button onClick={() => handleDeleteDestino(d.id)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>X</button>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={handleAddDestino} style={{ display: 'flex', gap: '10px' }}>
+          <input type="text" placeholder="Nombre Destino" value={nuevoDestino.nombre} onChange={(e) => setNuevoDestino({ ...nuevoDestino, nombre: e.target.value })} required style={{ flex: 1, padding: '10px', borderRadius: '5px', border: '1px solid #374151', background: '#111827', color: '#fff' }} />
+          <input type="number" step="0.01" placeholder="Precio ($)" value={nuevoDestino.precio} onChange={(e) => setNuevoDestino({ ...nuevoDestino, precio: e.target.value })} required style={{ width: '120px', padding: '10px', borderRadius: '5px', border: '1px solid #374151', background: '#111827', color: '#fff' }} />
+          <button type="submit" style={{ background: '#10b981', color: '#fff', border: 'none', padding: '10px 15px', borderRadius: '5px', cursor: 'pointer' }}>Agregar</button>
+        </form>
+      </div>
+
     </main>
   );
 }

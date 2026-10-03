@@ -128,9 +128,80 @@ import { Settings as SettingsIcon } from 'lucide-react';
 function Layout({ children }) {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [manualCloseRequest, setManualCloseRequest] = useState(null);
+  const [montoManual, setMontoManual] = useState('');
+
+  useEffect(() => {
+    const handleManualClose = (data) => {
+      setManualCloseRequest(data);
+    };
+    socket.on('manual_close_requested', handleManualClose);
+    return () => socket.off('manual_close_requested', handleManualClose);
+  }, []);
+
+  const handleForceClose = async () => {
+    if (!montoManual || isNaN(montoManual)) {
+      alert("Ingrese un monto válido");
+      return;
+    }
+    try {
+      const response = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/viajes/force-close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: manualCloseRequest.viaje_id,
+          monto_manual: parseFloat(montoManual)
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert("Viaje cerrado exitosamente");
+        setManualCloseRequest(null);
+        setMontoManual('');
+      } else {
+        alert("Error: " + data.error);
+      }
+    } catch (err) {
+      alert("Error de conexión");
+    }
+  };
 
   return (
     <div className={`dashboard ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {manualCloseRequest && (
+        <div style={{
+          position: 'fixed', top: 20, right: 20, backgroundColor: '#fff', 
+          border: '2px solid #ef4444', padding: 20, zIndex: 10000,
+          borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', width: 350
+        }}>
+          <h3 style={{ color: '#ef4444', marginTop: 0 }}>⚠️ Solicitud de Cierre Manual</h3>
+          <p>El móvil solicita cierre manual por falla de GPS.</p>
+          <p><strong>Chofer ID:</strong> {manualCloseRequest.chofer_id}</p>
+          <div style={{ marginTop: 15 }}>
+            <label>Monto a cobrar ($): </label>
+            <input 
+              type="number" 
+              value={montoManual} 
+              onChange={e => setMontoManual(e.target.value)} 
+              style={{ padding: '8px', width: '100%', marginTop: '5px', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
+            <button 
+              onClick={handleForceClose}
+              style={{ flex: 1, backgroundColor: '#10b981', color: 'white', padding: '10px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              CERRAR VIAJE
+            </button>
+            <button 
+              onClick={() => { setManualCloseRequest(null); setMontoManual(''); }}
+              style={{ flex: 1, backgroundColor: '#ef4444', color: 'white', padding: '10px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              IGNORAR
+            </button>
+          </div>
+        </div>
+      )}
       <nav className="sidebar">
         <div style={{ textAlign: 'center', cursor: 'pointer', padding: '10px 0' }} onClick={() => setIsCollapsed(!isCollapsed)}>
           <img src="/logo.png" alt="Logo" style={{ width: isCollapsed ? '40px' : '150px', transition: 'width 0.3s', borderRadius: '8px' }} />

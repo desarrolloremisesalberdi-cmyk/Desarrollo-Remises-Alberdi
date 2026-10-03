@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image, TextInput, ActivityIndicator, Vibration, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image, TextInput, ActivityIndicator, Vibration, Alert, Modal, ScrollView } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { io } from 'socket.io-client';
@@ -13,6 +13,10 @@ export default function MapScreen({ route, navigation }) {
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);
   const [choferAsignado, setChoferAsignado] = useState(null);
+  const [mensajeEspera, setMensajeEspera] = useState(null);
+  
+  const [modalLargaDistancia, setModalLargaDistancia] = useState(false);
+  const [destinosFijos, setDestinosFijos] = useState([]);
 
   const [origenTexto, setOrigenTexto] = useState('');
   const [destinoTexto, setDestinoTexto] = useState('');
@@ -72,12 +76,63 @@ export default function MapScreen({ route, navigation }) {
     }
   };
 
+  const pedirLargaDistancia = async (destinoFijo) => {
+    if (!coordsOrigen) {
+      Alert.alert('Error', 'Por favor, selecciona tu punto de partida (¿Dónde estás?) antes de continuar.');
+      return;
+    }
+    setModalLargaDistancia(false);
+    setSolicitando(true);
+    try {
+      const response = await fetch(`${API_URL}/api/viajes/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario_id: user.id,
+          origen_lat: coordsOrigen.lat,
+          origen_lng: coordsOrigen.lng,
+          destino_lat: 0,
+          destino_lng: 0,
+          destino_fijo_id: destinoFijo.id,
+          costo_fijo: destinoFijo.precio
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setEstadoViaje('Buscando móvil cercano (Larga Distancia)...');
+      } else {
+        Alert.alert('Error', 'No se pudo solicitar el viaje');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Error de conexión');
+    } finally {
+      setSolicitando(false);
+    }
+  };
+
   useEffect(() => {
+    const fetchDestinosFijos = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/destinos_fijos`);
+        const data = await response.json();
+        if (data.success) setDestinosFijos(data.destinos);
+      } catch (e) {
+        console.log(e);
+      }
+    };
+    fetchDestinosFijos();
     socket.on('ride_accepted', (data) => {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`¡${data.chofer.nombre} está en camino!\nMóvil #${data.chofer.numero_movil}`);
         setChoferAsignado(data.chofer);
         Vibration.vibrate(500);
+        
+        if (data.viaje && data.viaje.costo_fijo && data.chofer.datos_pago) {
+          Alert.alert(
+            'Pago Anticipado Requerido',
+            `Por favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`
+          );
+        }
       }
     });
 
@@ -91,7 +146,18 @@ export default function MapScreen({ route, navigation }) {
     socket.on('ride_finished', (data) => {
       if (data.pasajero_id === user.id) {
         setEstadoViaje(`✅ Viaje finalizado.\nDistancia: ${data.distancia.toFixed(2)} km\n\n💰 Total a pagar: $${data.monto}`);
+        setMensajeEspera(null);
         Vibration.vibrate(1000);
+      }
+    });
+
+    socket.on('toggle_espera', (data) => {
+      if (data.pasajero_id === user.id) {
+        if (data.en_espera) {
+          setMensajeEspera(`El chofer está en espera... (${data.minutos} min)`);
+        } else {
+          setMensajeEspera(null);
+        }
       }
     });
 
@@ -99,6 +165,7 @@ export default function MapScreen({ route, navigation }) {
       socket.off('ride_accepted');
       socket.off('ride_started');
       socket.off('ride_finished');
+      socket.off('toggle_espera');
     };
   }, [user.id]);
 
@@ -140,6 +207,11 @@ export default function MapScreen({ route, navigation }) {
             />
           )}
           <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
+          {mensajeEspera && (
+            <Text style={{ marginTop: 10, color: '#f59e0b', fontWeight: 'bold', textAlign: 'center' }}>
+              ⏳ {mensajeEspera}
+            </Text>
+          )}
         </View>
       )}
       
@@ -185,6 +257,14 @@ export default function MapScreen({ route, navigation }) {
             >
               {solicitando ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Pedir Taxi Ahora</Text>}
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#4f46e5', marginTop: 10 }]} 
+              onPress={() => setModalLargaDistancia(true)}
+              disabled={solicitando}
+            >
+              <Text style={styles.buttonText}>Simular Costos / Larga Distancia</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -206,6 +286,41 @@ export default function MapScreen({ route, navigation }) {
           </TouchableOpacity>
         )}
       </View>
+
+      <Modal
+        visible={modalLargaDistancia}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setModalLargaDistancia(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: theme.cardBg, borderRadius: 12, padding: 20, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 15, textAlign: 'center' }}>Destinos Larga Distancia</Text>
+            <ScrollView>
+              {destinosFijos.map((destino) => (
+                <TouchableOpacity 
+                  key={destino.id} 
+                  style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                  onPress={() => pedirLargaDistancia(destino)}
+                >
+                  <Text style={{ color: theme.text, fontSize: 16 }}>{destino.nombre}</Text>
+                  <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 16 }}>${destino.precio}</Text>
+                </TouchableOpacity>
+              ))}
+              {destinosFijos.length === 0 && (
+                <Text style={{ color: theme.text, textAlign: 'center', marginTop: 20 }}>No hay destinos disponibles</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#ef4444', marginTop: 20 }]} 
+              onPress={() => setModalLargaDistancia(false)}
+            >
+              <Text style={styles.buttonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }

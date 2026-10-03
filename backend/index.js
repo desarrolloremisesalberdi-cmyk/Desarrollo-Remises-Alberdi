@@ -202,11 +202,11 @@ app.post('/api/users/reset-password', async (req, res) => {
 
 // Solicitar un viaje
 app.post('/api/viajes/request', async (req, res) => {
-  const { usuario_id, origen_lat, origen_lng, destino_lat, destino_lng } = req.body;
+  const { usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, destino_fijo_id, costo_fijo } = req.body;
   try {
     const newViaje = await db.query(
-      'INSERT INTO viajes (usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, estado, hora_inicio) VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *',
-      [usuario_id, origen_lat || -33.044167, origen_lng || -61.168056, destino_lat, destino_lng, 'solicitado']
+      'INSERT INTO viajes (usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, destino_fijo_id, costo_fijo, estado, hora_inicio) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *',
+      [usuario_id, origen_lat || -33.044167, origen_lng || -61.168056, destino_lat, destino_lng, destino_fijo_id || null, costo_fijo || null, 'solicitado']
     );
     const viaje = newViaje.rows[0];
     
@@ -225,6 +225,42 @@ app.post('/api/viajes/request', async (req, res) => {
   } catch (error) {
     console.error('Error al solicitar viaje:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// ================= DESTINOS FIJOS =================
+app.get('/api/destinos_fijos', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM destinos_fijos ORDER BY nombre ASC');
+    res.json({ success: true, destinos: result.rows });
+  } catch (error) {
+    console.error('Error al obtener destinos fijos:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener destinos' });
+  }
+});
+
+app.post('/api/destinos_fijos', async (req, res) => {
+  const { nombre, precio } = req.body;
+  try {
+    const result = await db.query(
+      'INSERT INTO destinos_fijos (nombre, precio) VALUES ($1, $2) RETURNING *',
+      [nombre, precio]
+    );
+    res.json({ success: true, destino: result.rows[0] });
+  } catch (error) {
+    console.error('Error al agregar destino fijo:', error);
+    res.status(500).json({ success: false, error: 'Error al agregar destino' });
+  }
+});
+
+app.delete('/api/destinos_fijos/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query('DELETE FROM destinos_fijos WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error al eliminar destino fijo:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar destino' });
   }
 });
 
@@ -247,14 +283,15 @@ app.post('/api/tarifas', async (req, res) => {
     precio_100m_nocturna,
     bajada_bandera_jubilados,
     precio_100m_jubilados,
-    porcentaje_comision_agencia
+    porcentaje_comision_agencia,
+    precio_espera_hora
   } = req.body;
   try {
     const result = await db.query(
       `INSERT INTO tarifas 
-      (bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
-      [bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia]
+      (bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, precio_espera_hora, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+      [bajada_bandera_diurna, precio_100m_diurna, bajada_bandera_nocturna, precio_100m_nocturna, bajada_bandera_jubilados, precio_100m_jubilados, porcentaje_comision_agencia, precio_espera_hora || 0]
     );
     res.json({ success: true, tarifas: result.rows[0] });
   } catch (error) {
@@ -357,7 +394,7 @@ app.post('/api/viajes/accept', async (req, res) => {
 
     // 2. Buscar datos del chofer para avisarle al pasajero
     const choferQuery = await db.query(
-      'SELECT nombre, apellido, numero_movil, vehiculo_modelo, vehiculo_patente, foto_url FROM choferes WHERE id = $1',
+      'SELECT nombre, apellido, numero_movil, vehiculo_modelo, vehiculo_patente, foto_url, datos_pago FROM choferes WHERE id = $1',
       [chofer_id]
     );
     
@@ -367,7 +404,8 @@ app.post('/api/viajes/accept', async (req, res) => {
     io.emit('ride_accepted', {
       viaje_id: viaje_id,
       pasajero_id: viajeActualizado.usuario_id,
-      chofer: datosChofer
+      chofer: datosChofer,
+      viaje: viajeActualizado
     });
 
     res.json({ success: true, viaje: viajeActualizado });
@@ -404,7 +442,7 @@ app.post('/api/viajes/start', async (req, res) => {
 
 // Finalizar un viaje (Chofer pasa a Libre)
 app.post('/api/viajes/finish', async (req, res) => {
-  const { viaje_id, chofer_id, fin_lat, fin_lng } = req.body;
+  const { viaje_id, chofer_id, fin_lat, fin_lng, espera_minutos = 0 } = req.body;
   try {
     // 1. Obtener viaje y pasajero
     const viajeRes = await db.query('SELECT * FROM viajes WHERE id = $1', [viaje_id]);
@@ -436,7 +474,11 @@ app.post('/api/viajes/finish', async (req, res) => {
     }
 
     // 5. Calcular monto total y comisión
-    const montoCalculado = bajada + (precio100m * distancia100m);
+    const costoEspera = (espera_minutos / 60) * (tarifas.precio_espera_hora || 0);
+    let montoCalculado = bajada + (precio100m * distancia100m) + costoEspera;
+    if (viaje.costo_fijo) {
+      montoCalculado = parseFloat(viaje.costo_fijo) + costoEspera;
+    }
     const comisionAdmin = montoCalculado * (tarifas.porcentaje_comision_agencia / 100);
 
     // 6. Actualizar Viaje
@@ -448,9 +490,11 @@ app.post('/api/viajes/finish', async (req, res) => {
            hora_fin = NOW(), 
            distancia_km = $3, 
            monto_calculado = $4, 
-           comision_admin = $5 
-       WHERE id = $6 RETURNING *`,
-      [fin_lat, fin_lng, distanciaKm, montoCalculado, comisionAdmin, viaje_id]
+           comision_admin = $5,
+           espera_minutos = $6,
+           costo_espera = $7
+       WHERE id = $8 RETURNING *`,
+      [fin_lat, fin_lng, distanciaKm, montoCalculado, comisionAdmin, espera_minutos, costoEspera, viaje_id]
     );
 
     const viajeActualizado = result.rows[0];
@@ -476,6 +520,77 @@ app.post('/api/viajes/finish', async (req, res) => {
   }
 });
 
+// Solicitar cierre manual por falla de GPS (Chofer -> Operador)
+app.post('/api/viajes/request-manual-close', async (req, res) => {
+  const { viaje_id } = req.body;
+  try {
+    const result = await db.query(
+      "UPDATE viajes SET requiere_cierre_manual = true WHERE id = $1 RETURNING *",
+      [viaje_id]
+    );
+    if (result.rows.length === 0) return res.json({ success: false, error: 'Viaje no encontrado' });
+    const viajeActualizado = result.rows[0];
+
+    // Avisar al operador (y otros) que se necesita cierre manual
+    io.emit('manual_close_requested', {
+      viaje_id: viaje_id,
+      chofer_id: viajeActualizado.chofer_id
+    });
+
+    res.json({ success: true, viaje: viajeActualizado });
+  } catch (error) {
+    console.error('Error al solicitar cierre manual:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Forzar cierre de viaje con monto manual (Operador -> Viaje)
+app.post('/api/viajes/force-close', async (req, res) => {
+  const { viaje_id, monto_manual } = req.body;
+  try {
+    const viajeRes = await db.query('SELECT * FROM viajes WHERE id = $1', [viaje_id]);
+    if (viajeRes.rows.length === 0) return res.json({ success: false, error: 'Viaje no encontrado' });
+    const viaje = viajeRes.rows[0];
+
+    const tarifasRes = await db.query('SELECT * FROM tarifas ORDER BY id DESC LIMIT 1');
+    const tarifas = tarifasRes.rows[0];
+
+    // Calcula comision
+    const comisionAdmin = monto_manual * (tarifas.porcentaje_comision_agencia / 100);
+
+    const result = await db.query(
+      `UPDATE viajes 
+       SET estado = 'finalizado', 
+           hora_fin = NOW(), 
+           monto_calculado = $1, 
+           comision_admin = $2,
+           requiere_cierre_manual = false
+       WHERE id = $3 RETURNING *`,
+      [monto_manual, comisionAdmin, viaje_id]
+    );
+
+    const viajeActualizado = result.rows[0];
+
+    // Volver a poner al chofer libre
+    await db.query(
+      "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
+      [viajeActualizado.chofer_id]
+    );
+
+    // Avisar al pasajero del costo final
+    io.emit('ride_finished', {
+      viaje_id: viaje_id,
+      pasajero_id: viajeActualizado.usuario_id,
+      monto: monto_manual,
+      distancia: 0 // manual
+    });
+
+    res.json({ success: true, viaje: viajeActualizado });
+  } catch (error) {
+    console.error('Error al forzar cierre:', error);
+    res.status(500).json({ success: false, error: 'Error interno' });
+  }
+});
 
 // Obtener choferes activos (online)
 app.get('/api/choferes/activos', async (req, res) => {
@@ -575,6 +690,10 @@ io.on('connection', (socket) => {
   // Cuando un pasajero pide viaje directamente por socket (opcional)
   socket.on('request_ride_direct', (data) => {
     socket.broadcast.emit('new_ride_request', data);
+  });
+
+  socket.on('toggle_espera', (data) => {
+    socket.broadcast.emit('toggle_espera', data);
   });
 
   socket.on('disconnect', () => {

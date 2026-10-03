@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS public.viajes (
     hora_inicio TIMESTAMP WITH TIME ZONE,
     hora_fin TIMESTAMP WITH TIME ZONE,
     metodo_pago VARCHAR(20), -- efectivo, mercadopago
+    requiere_cierre_manual BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
