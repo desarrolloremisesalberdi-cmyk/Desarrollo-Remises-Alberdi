@@ -11,6 +11,9 @@ export default function MainScreen({ route, navigation }) {
   const [activeTrip, setActiveTrip] = useState(null);
   const [location, setLocation] = useState(null);
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
+  const [enEspera, setEnEspera] = useState(false);
+  const [minutosEspera, setMinutosEspera] = useState(0);
+  const [esperaIntervalId, setEsperaIntervalId] = useState(null);
 
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
@@ -173,18 +176,57 @@ export default function MainScreen({ route, navigation }) {
     }
   };
 
+  const handleToggleEspera = () => {
+    if (!enEspera) {
+      setEnEspera(true);
+      const intervalId = setInterval(() => {
+        setMinutosEspera(prev => {
+          const nuevosMinutos = prev + 1;
+          socket.emit('toggle_espera', {
+            viaje_id: activeTrip.id,
+            pasajero_id: activeTrip.usuario_id,
+            en_espera: true,
+            minutos: nuevosMinutos
+          });
+          return nuevosMinutos;
+        });
+      }, 60000); // 1 minuto
+      setEsperaIntervalId(intervalId);
+      socket.emit('toggle_espera', {
+        viaje_id: activeTrip.id,
+        pasajero_id: activeTrip.usuario_id,
+        en_espera: true,
+        minutos: minutosEspera
+      });
+    } else {
+      setEnEspera(false);
+      if (esperaIntervalId) {
+        clearInterval(esperaIntervalId);
+        setEsperaIntervalId(null);
+      }
+      socket.emit('toggle_espera', {
+        viaje_id: activeTrip.id,
+        pasajero_id: activeTrip.usuario_id,
+        en_espera: false,
+        minutos: minutosEspera
+      });
+    }
+  };
+
   const handleToggleStatus = async () => {
     if (!isOnline && activeTrip && activeTrip.estado === 'en_viaje') {
       // El chofer estaba ocupado y pasa a libre -> Finaliza el viaje
       try {
+        if (esperaIntervalId) clearInterval(esperaIntervalId);
         const response = await fetch(`${API_URL}/api/viajes/finish`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             viaje_id: activeTrip.id,
-            chofer_id: chofer.id,
+            chofer_id: chofer.id || chofer.dni,
             fin_lat: location ? location.latitude : -33.046,
-            fin_lng: location ? location.longitude : -61.169
+            fin_lng: location ? location.longitude : -61.169,
+            espera_minutos: minutosEspera
           })
         });
         const data = await response.json();
@@ -197,6 +239,26 @@ export default function MainScreen({ route, navigation }) {
       setActiveTrip(null);
     }
     setIsOnline(!isOnline);
+  };
+
+  const handleRequestManualClose = async () => {
+    if (!activeTrip) return;
+    try {
+      const response = await fetch(`${API_URL}/api/viajes/request-manual-close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viaje_id: activeTrip.id })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('Solicitud enviada. Esperando que el operador fije el monto...');
+        setActiveTrip({ ...activeTrip, requiere_cierre_manual: true });
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    }
   };
 
   return (
@@ -272,14 +334,38 @@ export default function MainScreen({ route, navigation }) {
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981') }]}
-            onPress={handleToggleStatus}
-          >
-            <Text style={styles.buttonText}>
-              {activeTrip ? 'Finalizar Viaje' : (isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)')}
-            </Text>
-          </TouchableOpacity>
+          <View>
+            {activeTrip && activeTrip.estado === 'en_viaje' && (
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 15 }]}
+                onPress={handleToggleEspera}
+              >
+                <Text style={styles.buttonText}>
+                  {enEspera ? `Pausar Espera (${minutosEspera} min)` : `Iniciar Espera (${minutosEspera} min)`}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981') }]}
+              onPress={handleToggleStatus}
+              disabled={activeTrip && activeTrip.requiere_cierre_manual}
+            >
+              <Text style={styles.buttonText}>
+                {activeTrip 
+                  ? (activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : 'Finalizar Viaje') 
+                  : (isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)')}
+              </Text>
+            </TouchableOpacity>
+
+            {activeTrip && activeTrip.estado === 'en_viaje' && !activeTrip.requiere_cierre_manual && (
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: '#64748b', marginTop: 10 }]}
+                onPress={handleRequestManualClose}
+              >
+                <Text style={styles.buttonText}>Cerrar por Falla GPS (Operador)</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
     </View>

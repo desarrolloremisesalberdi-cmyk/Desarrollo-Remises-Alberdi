@@ -558,7 +558,7 @@ export default function MapScreen({ route, navigation }) {
 
       {/* Payment Modal */}
       <Modal visible={!!paymentData} transparent={true} animationType="slide">
-        <View style={{flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.8)'}}>
+        <View style={{flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.8)', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999}}>
           <View style={{margin: 20, backgroundColor: theme.cardBg, borderRadius: 12, padding: 20, alignItems: 'center'}}>
             <Text style={{fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 10}}>Viaje Finalizado</Text>
             <Text style={{fontSize: 18, color: theme.text, marginBottom: 20}}>Monto a pagar: <Text style={{fontWeight: 'bold', color: '#10b981'}}>${paymentData?.monto}</Text></Text>
