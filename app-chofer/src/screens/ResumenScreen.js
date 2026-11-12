@@ -35,63 +35,92 @@ export default function ResumenScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.header, { backgroundColor: theme.cardBg, borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ color: theme.accent, fontSize: 16, fontWeight: 'bold' }}>{'< Volver'}</Text>
+      <View style={[styles.header, { backgroundColor: '#0b1320', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }]}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={{
+            paddingVertical: 7,
+            paddingHorizontal: 12,
+            backgroundColor: 'rgba(30, 41, 59, 0.85)',
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.12)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4
+          }}
+        >
+          <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '700' }}>⬅ Volver</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Mis Ganancias</Text>
-        <View style={{width: 60}} />
+        <Text style={[styles.headerTitle, { color: '#f8fafc' }]}>📊 Mis Ganancias</Text>
+        <View style={{ width: 60 }} />
       </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.accent} />
+          <ActivityIndicator size="large" color="#10b981" />
         </View>
       ) : (
         <ScrollView style={styles.scroll}>
-          <View style={[styles.summaryCard, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-            <Text style={[styles.summaryTitle, { color: theme.text }]}>Resumen Total</Text>
+          <View style={[styles.summaryCard, { 
+            backgroundColor: 'rgba(15, 23, 42, 0.94)', 
+            borderColor: 'rgba(16, 185, 129, 0.4)',
+            borderWidth: 1.5,
+            shadowColor: '#10b981',
+            shadowOpacity: 0.25,
+            shadowRadius: 12,
+            elevation: 8
+          }]}>
+            <Text style={[styles.summaryTitle, { color: theme.text }]}>Resumen del Chofer</Text>
             <View style={styles.row}>
-              <Text style={{ color: theme.text, fontSize: 16 }}>Viajes Completados:</Text>
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: 'bold' }}>{viajes.length}</Text>
+              <Text style={{ color: '#94a3b8', fontSize: 15 }}>Viajes Completados:</Text>
+              <Text style={{ color: '#f8fafc', fontSize: 16, fontWeight: 'bold' }}>{viajes.length}</Text>
             </View>
             <View style={styles.row}>
-              <Text style={{ color: theme.text, fontSize: 16 }}>Recaudación Total:</Text>
+              <Text style={{ color: '#94a3b8', fontSize: 15 }}>Recaudación Total:</Text>
               <Text style={{ color: '#10b981', fontSize: 18, fontWeight: 'bold' }}>${totalRecaudado.toFixed(2)}</Text>
             </View>
             <View style={styles.row}>
-              <Text style={{ color: theme.text, fontSize: 16 }}>Comisión Agencia:</Text>
+              <Text style={{ color: '#94a3b8', fontSize: 15 }}>Comisión Agencia:</Text>
               <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: 'bold' }}>${totalComision.toFixed(2)}</Text>
             </View>
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]} />
             <View style={styles.row}>
-              <Text style={{ color: theme.text, fontSize: 18, fontWeight: 'bold' }}>Ganancia Neta:</Text>
-              <Text style={{ color: theme.accent, fontSize: 22, fontWeight: 'bold' }}>${(totalRecaudado - totalComision).toFixed(2)}</Text>
+              <Text style={{ color: '#f8fafc', fontSize: 18, fontWeight: 'bold' }}>Ganancia Neta:</Text>
+              <Text style={{ color: '#10b981', fontSize: 24, fontWeight: '900' }}>${(totalRecaudado - totalComision).toFixed(2)}</Text>
             </View>
           </View>
 
-          <Text style={[styles.listTitle, { color: theme.text }]}>Historial de Viajes</Text>
+          <Text style={[styles.listTitle, { color: '#f8fafc' }]}>Historial de Viajes</Text>
           
           {viajes.length === 0 ? (
-            <Text style={{ color: theme.placeholder, textAlign: 'center', marginTop: 20 }}>No tienes viajes registrados aún.</Text>
+            <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 20 }}>No tienes viajes registrados aún.</Text>
           ) : (
             viajes.map(viaje => (
-              <View key={viaje.id} style={[styles.tripCard, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+              <View key={viaje.id} style={[styles.tripCard, { 
+                backgroundColor: 'rgba(15, 23, 42, 0.94)', 
+                borderColor: 'rgba(255, 255, 255, 0.08)',
+                borderWidth: 1,
+                shadowColor: '#000',
+                shadowOpacity: 0.2,
+                shadowRadius: 6,
+                elevation: 3
+              }]}>
                 <View style={styles.row}>
-                  <Text style={{ color: theme.text, fontWeight: 'bold' }}>#{viaje.id.substring(0,6)}...</Text>
-                  <Text style={{ color: theme.placeholder }}>{new Date(viaje.fecha).toLocaleString()}</Text>
+                  <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>#{viaje.id.substring(0,6)}...</Text>
+                  <Text style={{ color: '#64748b', fontSize: 12 }}>{new Date(viaje.fecha).toLocaleString()}</Text>
                 </View>
                 <View style={styles.row}>
-                  <Text style={{ color: theme.text }}>Pasajero:</Text>
-                  <Text style={{ color: theme.text }}>{viaje.pasajero_nombre} {viaje.pasajero_apellido}</Text>
+                  <Text style={{ color: '#94a3b8' }}>Pasajero:</Text>
+                  <Text style={{ color: '#f8fafc' }}>{viaje.pasajero_nombre} {viaje.pasajero_apellido}</Text>
                 </View>
                 <View style={styles.row}>
-                  <Text style={{ color: theme.text }}>Distancia:</Text>
-                  <Text style={{ color: theme.text }}>{Number(viaje.distancia_km || 0).toFixed(2)} km</Text>
+                  <Text style={{ color: '#94a3b8' }}>Distancia:</Text>
+                  <Text style={{ color: '#f8fafc' }}>{Number(viaje.distancia_km || 0).toFixed(2)} km</Text>
                 </View>
                 <View style={[styles.row, { marginTop: 10 }]}>
-                  <Text style={{ color: theme.text, fontWeight: 'bold' }}>Cobrado:</Text>
-                  <Text style={{ color: '#10b981', fontWeight: 'bold' }}>${Number(viaje.monto_calculado || 0).toFixed(2)}</Text>
+                  <Text style={{ color: '#f8fafc', fontWeight: 'bold' }}>Cobrado:</Text>
+                  <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 16 }}>${Number(viaje.monto_calculado || 0).toFixed(2)}</Text>
                 </View>
               </View>
             ))
@@ -103,21 +132,21 @@ export default function ResumenScreen({ route, navigation }) {
 }
 
 const darkTheme = {
-  bg: '#0f172a',
-  cardBg: 'rgba(30, 41, 59, 0.95)',
-  border: 'rgba(255, 255, 255, 0.1)',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
   text: '#f8fafc',
   placeholder: '#94a3b8',
-  accent: '#f59e0b', // Ámbar (Chofer)
+  accent: '#10b981',
 };
 
 const lightTheme = {
-  bg: '#f1f5f9',
-  cardBg: 'rgba(255, 255, 255, 0.95)',
-  border: 'rgba(0, 0, 0, 0.1)',
-  text: '#0f172a',
-  placeholder: '#64748b',
-  accent: '#f59e0b',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  text: '#f8fafc',
+  placeholder: '#94a3b8',
+  accent: '#10b981',
 };
 
 const styles = StyleSheet.create({

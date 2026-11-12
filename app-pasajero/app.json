@@ -1,15 +1,20 @@
 {
   "expo": {
-    "name": "app-pasajero",
+    "name": "Radio Taxis Alberdi",
     "slug": "app-pasajero",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/logo-alberdi.png",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBTsDYbXBONhz4OlA4dXEVvav16bkIQ2to"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

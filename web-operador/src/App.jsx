@@ -73,11 +73,56 @@ function DashboardMap() {
       });
     });
 
+    socket.on('driver_status_changed', (data) => {
+      setActiveDrivers((prev) => {
+        if (!prev[data.chofer_id]) return prev;
+        return {
+          ...prev,
+          [data.chofer_id]: {
+            ...prev[data.chofer_id],
+            estado: data.estado,
+            isOnline: data.isOnline !== undefined ? data.isOnline : prev[data.chofer_id].isOnline
+          }
+        };
+      });
+    });
+
     return () => {
       socket.off('driver_location');
       socket.off('driver_disconnected');
+      socket.off('driver_status_changed');
     };
   }, []);
+
+  const handleToggleEstadoChofer = async (choferId, nuevoEstado, origen = 'base_telefonica') => {
+    socket.emit('operator_set_driver_status', {
+      chofer_id: choferId,
+      estado: nuevoEstado,
+      origen: origen
+    });
+
+    setActiveDrivers((prev) => {
+      if (!prev[choferId]) return prev;
+      return {
+        ...prev,
+        [choferId]: {
+          ...prev[choferId],
+          estado: nuevoEstado,
+          isOnline: true
+        }
+      };
+    });
+
+    try {
+      await fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/set-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chofer_id: choferId, estado: nuevoEstado, origen: origen })
+      });
+    } catch (e) {
+      console.log('Error llamando a set-status en backend:', e);
+    }
+  };
 
   // Calcular totales reales
   const driversList = Object.values(activeDrivers);
@@ -135,12 +180,48 @@ function DashboardMap() {
             return (
               <Marker key={driver.chofer_id} position={[driver.lat, driver.lng]} icon={customIcon}>
                 <Popup>
-                  <div style={{ textAlign: 'center' }}>
+                  <div style={{ textAlign: 'center', minWidth: '170px' }}>
                     <img src={imageUrl} alt="Chofer" style={{ width: 60, height: 60, borderRadius: '50%', marginBottom: 5 }} />
                     <br />
                     <strong>Móvil #{driver.movil}</strong><br/>
-                    {statusText} <br/>
-                    DNI: {driver.dni}
+                    <span style={{ fontWeight: 'bold', color: isLibre ? '#10b981' : '#ef4444' }}>{statusText}</span><br/>
+                    <span style={{ fontSize: 12, color: '#666' }}>DNI: {driver.dni}</span>
+
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {isLibre ? (
+                        <button
+                          onClick={() => handleToggleEstadoChofer(driver.chofer_id, 'ocupado', 'base_telefonica')}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '7px 10px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontSize: 12
+                          }}
+                        >
+                          📞 Asignar Viaje Telefónico
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleEstadoChofer(driver.chofer_id, 'libre', 'manual')}
+                          style={{
+                            backgroundColor: '#10b981',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '7px 10px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontSize: 12
+                          }}
+                        >
+                          🟢 Poner Libre
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </Popup>
               </Marker>
@@ -159,6 +240,7 @@ function DashboardMap() {
 }
 
 import Configuration from './pages/Configuration';
+import PublicTracking from './pages/PublicTracking';
 import { Settings as SettingsIcon } from 'lucide-react';
 
 function Layout({ children }) {
@@ -257,15 +339,20 @@ function Layout({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<DashboardMap />} />
-          <Route path="/choferes" element={<Drivers />} />
-          <Route path="/nuevo-usuario" element={<NewUser />} />
-          <Route path="/finanzas" element={<Finances />} />
-          <Route path="/configuracion" element={<Configuration />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        <Route path="/track/:viajeId" element={<PublicTracking />} />
+        <Route path="/*" element={
+          <Layout>
+            <Routes>
+              <Route path="/" element={<DashboardMap />} />
+              <Route path="/choferes" element={<Drivers />} />
+              <Route path="/nuevo-usuario" element={<NewUser />} />
+              <Route path="/finanzas" element={<Finances />} />
+              <Route path="/configuracion" element={<Configuration />} />
+            </Routes>
+          </Layout>
+        } />
+      </Routes>
     </BrowserRouter>
   );
 }

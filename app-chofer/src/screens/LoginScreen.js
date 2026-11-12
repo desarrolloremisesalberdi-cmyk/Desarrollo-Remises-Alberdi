@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Switch, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
@@ -77,117 +77,132 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.bg }]}>
-      <Text style={[styles.title, { color: theme.text }]}>Portal Chofer</Text>
-      
-      <Text style={[styles.subtitle, { color: theme.text }]}>Iniciar Sesión</Text>
-      <TextInput 
-        style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]} 
-        placeholder="DNI" 
-        placeholderTextColor={theme.placeholder}
-        keyboardType="numeric" 
-        value={dni}
-        onChangeText={setDni}
-      />
-      <TextInput 
-        style={[styles.input, { backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.text }]} 
-        placeholder="Clave (Asignada por Operador)" 
-        placeholderTextColor={theme.placeholder}
-        secureTextEntry={true} 
-        value={clave}
-        onChangeText={setClave}
-      />
-      
-      <View style={styles.switchContainer}>
-        <Text style={[styles.switchLabel, { color: theme.text }]}>Recordar usuario</Text>
-        <Switch
-          value={recordar}
-          onValueChange={setRecordar}
-          trackColor={{ false: '#767577', true: theme.accent }}
-          thumbColor={recordar ? '#fff' : '#f4f3f4'}
+      <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        <Image 
+          source={require('../../assets/logo-alberdi.png')} 
+          style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 14, borderWidth: 2, borderColor: '#10b981' }} 
+          resizeMode="cover"
         />
+        <Text style={[styles.title, { color: theme.text, marginBottom: 4 }]}>Taxis Alberdi</Text>
+        <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.4)', borderWidth: 1, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12 }}>
+          <Text style={{ color: '#10b981', fontWeight: '800', fontSize: 12, letterSpacing: 0.8 }}>
+            PORTAL DEL CHOFER
+          </Text>
+        </View>
       </View>
+      
+      <View style={{ backgroundColor: theme.cardBg, borderRadius: 20, padding: 22, borderWidth: 1, borderColor: theme.border }}>
+        <Text style={[styles.subtitle, { color: theme.text }]}>Iniciar Turno</Text>
+        <TextInput 
+          style={[styles.input, { backgroundColor: 'rgba(15, 23, 42, 0.8)', borderColor: theme.border, color: theme.text }]} 
+          placeholder="DNI" 
+          placeholderTextColor={theme.placeholder}
+          keyboardType="numeric" 
+          value={dni}
+          onChangeText={setDni}
+        />
+        <TextInput 
+          style={[styles.input, { backgroundColor: 'rgba(15, 23, 42, 0.8)', borderColor: theme.border, color: theme.text }]} 
+          placeholder="Clave (Asignada por Operador)" 
+          placeholderTextColor={theme.placeholder}
+          secureTextEntry={true} 
+          value={clave}
+          onChangeText={setClave}
+        />
+        
+        <View style={styles.switchContainer}>
+          <Text style={[styles.switchLabel, { color: theme.text }]}>Recordar mis datos</Text>
+          <Switch
+            value={recordar}
+            onValueChange={setRecordar}
+            trackColor={{ false: '#334155', true: '#10b981' }}
+            thumbColor={recordar ? '#fff' : '#94a3b8'}
+          />
+        </View>
 
-      <TouchableOpacity 
-        style={[styles.button, { backgroundColor: theme.accent }]}
-        onPress={handleLogin}
-      >
-        <Text style={styles.buttonText}>Entrar a Trabajar</Text>
-      </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.button, { backgroundColor: '#10b981' }]}
+          onPress={handleLogin}
+        >
+          <Text style={styles.buttonText}>⚡ Entrar a Trabajar</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
 
 const darkTheme = {
-  bg: '#0f172a',
-  cardBg: 'rgba(30, 41, 59, 0.7)',
-  border: 'rgba(255, 255, 255, 0.1)',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
   text: '#f8fafc',
-  placeholder: '#94a3b8',
-  accent: '#f59e0b', // Ámbar (Chofer)
+  placeholder: '#64748b',
+  accent: '#10b981', // Verde Esmeralda Neón Oficial
 };
 
 const lightTheme = {
-  bg: '#f1f5f9',
-  cardBg: 'rgba(255, 255, 255, 0.8)',
-  border: 'rgba(0, 0, 0, 0.1)',
-  text: '#0f172a',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  text: '#f8fafc',
   placeholder: '#64748b',
-  accent: '#f59e0b',
+  accent: '#10b981',
 };
 
 const styles = StyleSheet.create({
   container: {
-    padding: 30,
+    padding: 24,
     flexGrow: 1,
-    justifyContent: 'center'
+    justifyContent: 'center',
+    maxWidth: 440,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '900',
     textAlign: 'center',
-    marginBottom: 50,
-    letterSpacing: -1,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 15,
-    marginBottom: 20,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 16,
   },
   input: {
-    height: 55,
+    height: 50,
     borderWidth: 1,
     borderRadius: 12,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    fontSize: 16,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    fontSize: 15,
   },
   button: {
-    padding: 18,
-    borderRadius: 12,
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 25,
-    shadowColor: '#f59e0b',
+    marginTop: 10,
+    shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 5,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   switchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 5,
+    marginVertical: 10,
+    paddingHorizontal: 2,
   },
   switchLabel: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
   }
 });

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Search, AlertTriangle, CheckCircle, ChevronRight, UserPlus, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
+
+const socket = io('https://desarrollo-remises-alberdi.onrender.com');
 
 export default function Drivers() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,12 +28,42 @@ export default function Drivers() {
             licencia_vencimiento_str: ch.licencia_vencimiento ? new Date(ch.licencia_vencimiento).toISOString().split('T')[0] : '2099-12-31',
             estado_str: !ch.is_online ? 'Desconectado' : (ch.estado ? ch.estado.charAt(0).toUpperCase() + ch.estado.slice(1) : 'Desconocido'),
             vehiculo_str: ch.vehiculo_modelo || 'Vehículo Genérico',
-            suspendido: ch.suspendido || false
+            suspendido: ch.suspendido || false,
+            calificacion_promedio: ch.calificacion_promedio ? parseFloat(ch.calificacion_promedio) : 5.0,
+            total_calificaciones: ch.total_calificaciones ? parseInt(ch.total_calificaciones) : 0
           }));
           setDriversList(list);
         }
       })
       .catch(err => console.error(err));
+
+    const handleDriverRated = (data) => {
+      setDriversList(prev => prev.map(d => {
+        if (d.id === data.chofer_id) {
+          return {
+            ...d,
+            calificacion_promedio: parseFloat(data.calificacion_promedio),
+            total_calificaciones: parseInt(data.total_calificaciones)
+          };
+        }
+        return d;
+      }));
+      setSelectedDriver(prev => {
+        if (prev && prev.id === data.chofer_id) {
+          return {
+            ...prev,
+            calificacion_promedio: parseFloat(data.calificacion_promedio),
+            total_calificaciones: parseInt(data.total_calificaciones)
+          };
+        }
+        return prev;
+      });
+    };
+
+    socket.on('driver_rated', handleDriverRated);
+    return () => {
+      socket.off('driver_rated', handleDriverRated);
+    };
   }, []);
 
   // Filtramos por DNI o Número de Móvil
@@ -90,6 +123,40 @@ export default function Drivers() {
     }
   };
 
+  const handleToggleEstado = async (choferId, nuevoEstado, origen = 'base_telefonica') => {
+    // Emitir inmediatamente por socket
+    socket.emit('operator_set_driver_status', {
+      chofer_id: choferId,
+      estado: nuevoEstado,
+      origen: origen
+    });
+
+    try {
+      const res = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/set-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chofer_id: choferId, estado: nuevoEstado, origen: origen })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDriversList(prev => prev.map(d => 
+          d.id === choferId ? { 
+            ...d, 
+            estado: nuevoEstado, 
+            estado_str: nuevoEstado.charAt(0).toUpperCase() + nuevoEstado.slice(1) 
+          } : d
+        ));
+        setSelectedDriver(prev => ({
+          ...prev,
+          estado: nuevoEstado,
+          estado_str: nuevoEstado.charAt(0).toUpperCase() + nuevoEstado.slice(1)
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="page-container">
       <header className="page-header">
@@ -121,7 +188,23 @@ export default function Drivers() {
               onClick={() => setSelectedDriver(driver)}
             >
               <div className="driver-info-basic">
-                <h3>Móvil #{driver.movilStr} - {driver.nombreCompleto}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0 }}>Móvil #{driver.movilStr} - {driver.nombreCompleto}</h3>
+                  <span style={{ 
+                    fontSize: '11px', 
+                    fontWeight: '700', 
+                    color: '#fbbf24', 
+                    backgroundColor: 'rgba(251, 191, 36, 0.12)', 
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                    padding: '2px 7px', 
+                    borderRadius: '6px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                  }}>
+                    ⭐ {Number(driver.calificacion_promedio || 5.0).toFixed(1)} ({driver.total_calificaciones || 0})
+                  </span>
+                </div>
                 <p>DNI: {driver.dni}</p>
               </div>
               <ChevronRight color="#888" />
@@ -157,6 +240,15 @@ export default function Drivers() {
                   <span>Alias / CBU:</span>
                   <strong>{selectedDriver.datos_pago || 'No especificado'}</strong>
                 </div>
+                <div className="detail-item">
+                  <span>Calificación Pasajeros:</span>
+                  <strong style={{ color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    ⭐ {Number(selectedDriver.calificacion_promedio || 5.0).toFixed(1)} / 5.0
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 'normal' }}>
+                      ({selectedDriver.total_calificaciones || 0} evaluaciones)
+                    </span>
+                  </strong>
+                </div>
                 
                 <div className="detail-item license-status" style={{ gridColumn: '1 / -1' }}>
                   <span>Estado de Licencia:</span>
@@ -165,6 +257,32 @@ export default function Drivers() {
                     <strong style={{marginLeft: 5}}>{checkLicenseStatus(selectedDriver.licencia_vencimiento_str).text}</strong>
                   </div>
                   <p className="expiration-date">Vence el: {selectedDriver.licencia_vencimiento_str}</p>
+                </div>
+
+                <div className="detail-item" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.04)', padding: '12px 16px', borderRadius: 10, marginTop: 5 }}>
+                  <div>
+                    <span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>Estado Operativo de Despacho:</span>
+                    <strong style={{ fontSize: 15, color: selectedDriver.estado === 'libre' ? '#10b981' : '#ef4444' }}>
+                      {selectedDriver.estado === 'libre' ? '🟢 LIBRE (Recibe viajes de la app)' : '🔴 OCUPADO (No recibe viajes de la app)'}
+                    </strong>
+                  </div>
+                  {selectedDriver.estado === 'libre' ? (
+                    <button 
+                      className="btn btn-danger"
+                      style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold' }}
+                      onClick={() => handleToggleEstado(selectedDriver.id, 'ocupado', 'base_telefonica')}
+                    >
+                      📞 Poner Ocupado (Viaje Telefónico)
+                    </button>
+                  ) : (
+                    <button 
+                      className="btn btn-primary"
+                      style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold', backgroundColor: '#10b981', borderColor: '#10b981' }}
+                      onClick={() => handleToggleEstado(selectedDriver.id, 'libre', 'manual')}
+                    >
+                      🟢 Poner Libre
+                    </button>
+                  )}
                 </div>
               </div>
               

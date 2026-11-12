@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
@@ -8,6 +8,7 @@ const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function MainScreen({ route, navigation }) {
   const [isOnline, setIsOnline] = useState(false);
+  const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [activeTrip, setActiveTrip] = useState(null);
   const [location, setLocation] = useState(null);
   const [socket, setSocket] = useState(null);
@@ -24,47 +25,192 @@ export default function MainScreen({ route, navigation }) {
   const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
+  const locationRef = useRef(location);
+  const isOnlineRef = useRef(isOnline);
+  const activeTripRef = useRef(activeTrip);
+
+  useEffect(() => { locationRef.current = location; }, [location]);
+  useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
+  useEffect(() => { activeTripRef.current = activeTrip; }, [activeTrip]);
+
   useEffect(() => {
-    const newSocket = io(SOCKET_URL);
+    const newSocket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000
+    });
     setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      console.log('Socket chofer conectado');
+      if (chofer && (isOnlineRef.current || activeTripRef.current)) {
+        newSocket.emit('update_location', {
+          chofer_id: chofer.id || chofer.dni,
+          dni: chofer.dni,
+          movil: chofer.numero_movil,
+          isOnline: isOnlineRef.current,
+          lat: locationRef.current ? locationRef.current.latitude : -33.044167,
+          lng: locationRef.current ? locationRef.current.longitude : -61.168056,
+          foto_url: chofer.foto_url || null
+        });
+      }
+    });
     
     newSocket.on('new_ride_request', (viaje) => {
-      // Check if online before setting incoming ride
-      setIncomingRide(prev => {
-        // Can't check state directly inside without dependency, but we can set it
-        return viaje;
-      });
+      if (viajeTelefonicoActivo) {
+        return; // Ocupado en viaje telefónico
+      }
+      // Si el viaje tiene chofer_destinado_id y no es este chofer, ignorar
+      if (viaje.chofer_destinado_id && viaje.chofer_destinado_id !== chofer.id) {
+        return;
+      }
+      setIncomingRide(viaje);
+    });
+
+    newSocket.on('driver_status_changed', (data) => {
+      const matchesChofer = 
+        (data.chofer_id && String(data.chofer_id) === String(chofer.id)) ||
+        (data.dni && String(data.dni) === String(chofer.dni)) ||
+        (data.numero_movil && String(data.numero_movil) === String(chofer.numero_movil));
+
+      if (matchesChofer) {
+        if (data.estado === 'ocupado') {
+          setIsOnline(false);
+          if (data.origen === 'base_telefonica') {
+            setViajeTelefonicoActivo(true);
+            Alert.alert(
+              '📞 VIAJE TELEFÓNICO ASIGNADO',
+              'La Base te ha asignado un viaje tomado por llamada telefónica.\n\nTu estado ahora es OCUPADO.\nEste viaje NO rinde comisión a la app (0% Comisión).\nAl completar el viaje, presiona "Finalizar Viaje y Ponerme Libre".'
+            );
+          }
+        } else if (data.estado === 'libre') {
+          setViajeTelefonicoActivo(false);
+          setIsOnline(true);
+        } else if (data.estado === 'inactivo') {
+          setViajeTelefonicoActivo(false);
+          setIsOnline(false);
+        }
+      }
     });
 
     return () => {
       newSocket.off('new_ride_request');
+      newSocket.off('driver_status_changed');
       newSocket.disconnect();
     };
-  }, []);
+  }, [viajeTelefonicoActivo, chofer]);
 
   useEffect(() => {
     navigation.setOptions({
+      headerTitleAlign: 'left',
+      headerStyle: {
+        backgroundColor: '#0b1320',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+      },
+      headerTitle: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+          <Image 
+            source={require('../../assets/logo-alberdi.png')} 
+            style={{ width: 32, height: 32, borderRadius: 16 }} 
+            resizeMode="cover"
+          />
+          <View>
+            <Text style={{ color: '#f8fafc', fontWeight: '800', fontSize: 15, letterSpacing: -0.2 }}>
+              Taxis Alberdi
+            </Text>
+            <Text style={{ color: '#10b981', fontWeight: '700', fontSize: 10, letterSpacing: 0.3 }}>
+              Móvil #{chofer?.numero_movil || '14'} • Chofer
+            </Text>
+          </View>
+        </View>
+      ),
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10, gap: 6 }}>
           <TouchableOpacity 
-            style={{ marginRight: 10, padding: 8, backgroundColor: theme.cardBg, borderWidth: 1, borderColor: theme.border, borderRadius: 6 }} 
+            style={{ 
+              paddingVertical: 6, 
+              paddingHorizontal: 10, 
+              backgroundColor: 'rgba(30, 41, 59, 0.85)', 
+              borderRadius: 16, 
+              borderWidth: 1, 
+              borderColor: 'rgba(255, 255, 255, 0.12)',
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              gap: 4
+            }} 
             onPress={() => navigation.navigate('Resumen', { chofer })}
           >
-            <Text style={{ color: theme.text, fontWeight: 'bold' }}>Resumen</Text>
+            <Text style={{ fontSize: 12 }}>📊</Text>
+            <Text style={{ color: '#e2e8f0', fontWeight: '700', fontSize: 11 }}>Resumen</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={{ marginRight: 15, padding: 8, backgroundColor: '#ef4444', borderRadius: 6 }} 
+            style={{ 
+              paddingVertical: 6, 
+              paddingHorizontal: 8, 
+              backgroundColor: 'rgba(239, 68, 68, 0.18)', 
+              borderRadius: 16, 
+              borderWidth: 1, 
+              borderColor: 'rgba(239, 68, 68, 0.35)',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 3
+            }} 
             onPress={() => {
               if (socket) socket.emit('manual_disconnect', { chofer_id: chofer.id || chofer.dni });
               navigation.replace('Login');
             }}
           >
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
+            <Text style={{ fontSize: 11 }}>🚪</Text>
+            <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 11 }}>Salir</Text>
           </TouchableOpacity>
         </View>
       )
     });
   }, [navigation, chofer, theme]);
+
+  // Monitoreo de ciclo de vida del dispositivo (Bloqueo / Segundo Plano / Desbloqueo)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Al desbloquear o abrir la app desde segundo plano
+        if (socket) {
+          if (!socket.connected) socket.connect();
+          if (chofer && (isOnlineRef.current || activeTripRef.current)) {
+            socket.emit('update_location', {
+              chofer_id: chofer.id || chofer.dni,
+              dni: chofer.dni,
+              movil: chofer.numero_movil,
+              isOnline: isOnlineRef.current,
+              lat: locationRef.current ? locationRef.current.latitude : -33.044167,
+              lng: locationRef.current ? locationRef.current.longitude : -61.168056,
+              foto_url: chofer.foto_url || null
+            });
+          }
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [socket, chofer]);
+
+  // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket y la posición
+  useEffect(() => {
+    if (!isOnline && !activeTrip) return;
+    const heartbeat = setInterval(() => {
+      if (socket && chofer) {
+        socket.emit('update_location', {
+          chofer_id: chofer.id || chofer.dni,
+          dni: chofer.dni,
+          movil: chofer.numero_movil,
+          isOnline: isOnlineRef.current,
+          lat: locationRef.current ? locationRef.current.latitude : -33.044167,
+          lng: locationRef.current ? locationRef.current.longitude : -61.168056,
+          foto_url: chofer.foto_url || null
+        });
+      }
+    }, 12000);
+    return () => clearInterval(heartbeat);
+  }, [socket, chofer, isOnline, activeTrip]);
 
   useEffect(() => {
     let subscription = null;
@@ -83,6 +229,7 @@ export default function MainScreen({ route, navigation }) {
           socket.emit('update_location', {
             chofer_id: chofer.id,
             dni: chofer.dni,
+            movil: chofer.numero_movil,
             isOnline: true,
             lat: location ? location.latitude : -33.044167,
             lng: location ? location.longitude : -61.168056,
@@ -95,6 +242,7 @@ export default function MainScreen({ route, navigation }) {
             accuracy: Location.Accuracy.High,
             timeInterval: 3000,
             distanceInterval: 10,
+            showsBackgroundLocationIndicator: true
           },
           (loc) => {
             const { latitude, longitude } = loc.coords;
@@ -169,7 +317,21 @@ export default function MainScreen({ route, navigation }) {
     setIncomingRide(null);
   };
 
-  const rechazarViaje = () => {
+  const rechazarViaje = async () => {
+    if (incomingRide && incomingRide.id && chofer.id) {
+      try {
+        await fetch(`${SOCKET_URL}/api/viajes/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            viaje_id: incomingRide.id,
+            chofer_id: chofer.id
+          })
+        });
+      } catch (e) {
+        console.error('Error al rechazar:', e);
+      }
+    }
     setIncomingRide(null);
   };
 
@@ -265,6 +427,43 @@ export default function MainScreen({ route, navigation }) {
     setIsOnline(!isOnline);
   };
 
+  const finalizarViajeTelefonico = async () => {
+    setViajeTelefonicoActivo(false);
+    setIsOnline(true);
+
+    const updatePayload = {
+      chofer_id: chofer.id || 'sim-native',
+      dni: chofer.dni || 'sim',
+      numero_movil: chofer.numero_movil || '14',
+      estado: 'libre',
+      origen: 'chofer_self'
+    };
+
+    if (socket) {
+      socket.emit('operator_set_driver_status', updatePayload);
+      socket.emit('update_location', {
+        chofer_id: chofer.id,
+        dni: chofer.dni,
+        isOnline: true,
+        lat: location ? location.latitude : -33.044167,
+        lng: location ? location.longitude : -61.168056,
+        foto_url: chofer.foto_url || null
+      });
+    }
+
+    try {
+      await fetch(`${SOCKET_URL}/api/choferes/set-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+    } catch (e) {
+      console.log('Error al actualizar estado:', e);
+    }
+
+    Alert.alert('✅ Viaje Finalizado', 'Viaje telefónico concluido con éxito.\nYa te encuentras LIBRE para nuevos viajes.');
+  };
+
   const handleRequestManualClose = async () => {
     if (!activeTrip) return;
     try {
@@ -333,6 +532,11 @@ export default function MainScreen({ route, navigation }) {
         <View style={styles.notificationOverlay}>
           <View style={[styles.notificationCard, { backgroundColor: theme.cardBg, borderColor: theme.accent }]}>
             <Text style={[styles.notificationTitle, { color: theme.accent }]}>🚕 ¡NUEVO VIAJE!</Text>
+            {incomingRide.chofer_destinado_id && (
+              <View style={{ backgroundColor: '#6366f1', padding: 8, borderRadius: 8, marginBottom: 12, width: '100%', alignItems: 'center' }}>
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>⭐ ¡El pasajero te eligió especialmente a ti!</Text>
+              </View>
+            )}
             <Text style={[styles.notificationText, { color: theme.text }]}>ID Viaje: #{incomingRide.id || 'N/A'}</Text>
             {incomingRide.pasajero_nombre && (
               <Text style={[styles.notificationText, { color: theme.text, fontWeight: 'bold' }]}>Pasajero: {incomingRide.pasajero_nombre}</Text>
@@ -359,67 +563,192 @@ export default function MainScreen({ route, navigation }) {
         </View>
       )}
       
-      <View style={[styles.header, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-        <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#10b981' : '#ef4444' }]} />
-        <Text style={[styles.statusText, { color: theme.text }]}>{isOnline ? 'ESTÁS LIBRE (VERDE)' : 'ESTÁS OCUPADO/INACTIVO (ROJO)'}</Text>
+      {/* HUD Superior de Estado del Chofer (Glassmorphism) */}
+      <View style={[
+        styles.header, 
+        { 
+          backgroundColor: 'rgba(15, 23, 42, 0.94)', 
+          borderColor: viajeTelefonicoActivo 
+            ? '#f59e0b' 
+            : (isOnline ? '#10b981' : 'rgba(239, 68, 68, 0.6)'),
+          shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (isOnline ? '#10b981' : '#ef4444'),
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
+          elevation: 8,
+        }
+      ]}>
+        <View style={[
+          styles.statusIndicator, 
+          { 
+            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (isOnline ? '#10b981' : '#ef4444'),
+          }
+        ]} />
+        <Text style={[styles.statusText, { color: '#f8fafc' }]}>
+          {viajeTelefonicoActivo 
+            ? '📞 VIAJE TELEFÓNICO EN CURSO' 
+            : (isOnline ? '🟢 EN LÍNEA • DISPONIBLE PARA VIAJES' : '🔴 FUERA DE SERVICIO • EN PAUSA')}
+        </Text>
       </View>
 
-      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Recaudación Hoy: $0</Text>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg }]}>
+        {/* Barra superior estilo bottom-sheet */}
+        <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 12 }} />
+
+        {/* Tarjeta Ejecutiva de Resumen del Turno */}
+        <View style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          borderRadius: 16,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+          marginBottom: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <View>
+            <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              Recaudación de Hoy
+            </Text>
+            <Text style={{ color: '#10b981', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>
+              $0
+            </Text>
+          </View>
+          <View style={{
+            backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.12)',
+            borderWidth: 1,
+            borderColor: isOnline ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.3)',
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+            borderRadius: 12,
+            alignItems: 'flex-end'
+          }}>
+            <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
+              Móvil #{chofer.numero_movil || '14'}
+            </Text>
+            <Text style={{ color: isOnline ? '#34d399' : '#f87171', fontSize: 11, fontWeight: '800' }}>
+              {isOnline ? '● Conectado' : '○ En Pausa'}
+            </Text>
+          </View>
+        </View>
         
-        {activeTrip && activeTrip.estado !== 'en_viaje' ? (
+        {viajeTelefonicoActivo ? (
+          <View style={{ width: '100%', alignItems: 'center' }}>
+            <View style={{
+              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+              borderColor: '#f59e0b',
+              borderWidth: 1.5,
+              borderRadius: 16,
+              padding: 16,
+              width: '100%',
+              marginBottom: 14,
+              alignItems: 'center'
+            }}>
+              <Text style={{ fontSize: 26, marginBottom: 4 }}>📞</Text>
+              <Text style={{ color: '#f8fafc', fontWeight: 'bold', fontSize: 16, textAlign: 'center' }}>
+                VIAJE TELEFÓNICO ASIGNADO
+              </Text>
+              <Text style={{ color: '#cbd5e1', fontSize: 12, textAlign: 'center', marginTop: 2 }}>
+                Asignado por Operador desde la Base
+              </Text>
+              
+              <View style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                borderColor: '#10b981',
+                borderWidth: 1,
+                borderRadius: 8,
+                paddingVertical: 4,
+                paddingHorizontal: 10,
+                marginTop: 8
+              }}>
+                <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 12 }}>
+                  ✓ 0% Comisión (Sin retención de app)
+                </Text>
+              </View>
+              <Text style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                La aplicación no recibirá solicitudes hasta que finalices este viaje.
+              </Text>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#10b981', width: '100%', shadowColor: '#10b981', shadowOpacity: 0.45, elevation: 6 }]}
+              onPress={finalizarViajeTelefonico}
+            >
+              <Text style={styles.buttonText}>✓ Finalizar Viaje y Ponerme Libre</Text>
+            </TouchableOpacity>
+          </View>
+        ) : activeTrip && activeTrip.estado !== 'en_viaje' ? (
           <>
             {activeTrip.es_jubilado && (
-              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 15, borderRadius: 10, marginBottom: 15, borderColor: '#10b981', borderWidth: 1 }}>
-                <Text style={{ color: '#10b981', fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>Este viaje aplica Tarifa Jubilado</Text>
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: 14, borderRadius: 14, marginBottom: 12, borderColor: '#10b981', borderWidth: 1.5 }}>
+                <Text style={{ color: '#10b981', fontWeight: 'bold', textAlign: 'center', marginBottom: 8, fontSize: 14 }}>
+                  🛡️ Este viaje aplica Tarifa Jubilado
+                </Text>
                 <TouchableOpacity 
-                  style={[styles.button, { backgroundColor: confirmadoJubilado ? '#10b981' : 'transparent', borderWidth: 2, borderColor: '#10b981', marginTop: 0 }]}
+                  style={[styles.button, { backgroundColor: confirmadoJubilado ? '#10b981' : 'transparent', borderWidth: 1.5, borderColor: '#10b981', paddingVertical: 10 }]}
                   onPress={() => setConfirmadoJubilado(!confirmadoJubilado)}
                 >
-                  <Text style={[styles.buttonText, { color: confirmadoJubilado ? 'white' : '#10b981' }]}>
+                  <Text style={[styles.buttonText, { color: confirmadoJubilado ? 'white' : '#10b981', fontSize: 14 }]}>
                     {confirmadoJubilado ? '✓ Identidad Confirmada' : 'Tocar para Confirmar DNI'}
                   </Text>
                 </TouchableOpacity>
               </View>
             )}
             <TouchableOpacity 
-              style={[styles.button, { backgroundColor: (activeTrip.es_jubilado && !confirmadoJubilado) ? '#94a3b8' : '#3b82f6' }]}
+              style={[
+                styles.button, 
+                { 
+                  backgroundColor: (activeTrip.es_jubilado && !confirmadoJubilado) ? '#64748b' : '#3b82f6',
+                  shadowColor: '#3b82f6',
+                  shadowOpacity: 0.45,
+                  elevation: 5
+                }
+              ]}
               onPress={empezarRecorrido}
               disabled={activeTrip.es_jubilado && !confirmadoJubilado}
             >
-              <Text style={styles.buttonText}>Empezar Recorrido</Text>
+              <Text style={styles.buttonText}>🚀 Empezar Recorrido</Text>
             </TouchableOpacity>
           </>
         ) : (
           <View>
             {activeTrip && activeTrip.estado === 'en_viaje' && (
               <TouchableOpacity 
-                style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 15 }]}
+                style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 12, shadowColor: enEspera ? '#f59e0b' : '#3b82f6', shadowOpacity: 0.4, elevation: 5 }]}
                 onPress={handleToggleEspera}
               >
                 <Text style={styles.buttonText}>
-                  {enEspera ? `Pausar Espera (${minutosEspera} min)` : `Iniciar Espera (${minutosEspera} min)`}
+                  {enEspera ? `⏸️ Pausar Espera (${minutosEspera} min)` : `⏳ Iniciar Espera (${minutosEspera} min)`}
                 </Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity 
-              style={[styles.button, { backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981') }]}
+              style={[
+                styles.button, 
+                { 
+                  backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981'),
+                  shadowColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981'),
+                  shadowOpacity: 0.45,
+                  elevation: 6
+                }
+              ]}
               onPress={handleToggleStatus}
               disabled={activeTrip && activeTrip.requiere_cierre_manual}
             >
               <Text style={styles.buttonText}>
                 {activeTrip 
-                  ? (activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : 'Finalizar Viaje') 
-                  : (isOnline ? 'Pasar a Ocupado / Fuera de servicio' : 'Pasar a Libre (Comenzar a recibir viajes)')}
+                  ? (activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : '🏁 Finalizar Viaje') 
+                  : (isOnline ? '⏸️ Pasar a Ocupado / Pausar Turno' : '⚡ Pasar a Libre (Comenzar Turno)')}
               </Text>
             </TouchableOpacity>
 
             {activeTrip && activeTrip.estado === 'en_viaje' && !activeTrip.requiere_cierre_manual && (
               <TouchableOpacity 
-                style={[styles.button, { backgroundColor: '#64748b', marginTop: 10 }]}
+                style={[styles.button, { backgroundColor: 'rgba(100, 116, 139, 0.6)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, marginTop: 10 }]}
                 onPress={handleRequestManualClose}
               >
-                <Text style={styles.buttonText}>Cerrar por Falla GPS (Operador)</Text>
+                <Text style={[styles.buttonText, { fontSize: 13, color: '#cbd5e1' }]}>⚠️ Cerrar por Falla GPS (Operador)</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -430,19 +759,19 @@ export default function MainScreen({ route, navigation }) {
 }
 
 const darkTheme = {
-  bg: '#0f172a',
-  cardBg: 'rgba(30, 41, 59, 0.95)',
-  border: 'rgba(255, 255, 255, 0.1)',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
   text: '#f8fafc',
-  accent: '#f59e0b', // Ámbar (Chofer)
+  accent: '#10b981', // Verde Esmeralda Neón Oficial
 };
 
 const lightTheme = {
-  bg: '#f1f5f9',
-  cardBg: 'rgba(255, 255, 255, 0.95)',
-  border: 'rgba(0, 0, 0, 0.1)',
-  text: '#0f172a',
-  accent: '#f59e0b',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  text: '#f8fafc',
+  accent: '#10b981',
 };
 
 const styles = StyleSheet.create({
@@ -454,65 +783,62 @@ const styles = StyleSheet.create({
   },
   header: {
     position: 'absolute',
-    top: 50,
+    top: 20,
     alignSelf: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 30,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 5,
-    borderWidth: 1,
+    borderWidth: 1.5,
+    zIndex: 100,
   },
   statusIndicator: {
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginRight: 10,
   },
   statusText: {
-    fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 0.3,
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.4,
   },
   bottomCard: {
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    padding: 25,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderTopColor: 'rgba(16, 185, 129, 0.45)',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.5,
     shadowRadius: 15,
-    elevation: 10,
-    borderTopWidth: 1,
+    elevation: 15,
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center'
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 14,
+    textAlign: 'center',
   },
   button: {
-    padding: 18,
-    borderRadius: 12,
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   /* Estilos para el Pop-up del Viaje */
@@ -524,50 +850,47 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   notificationCard: {
-    padding: 35,
+    padding: 28,
     borderRadius: 24,
-    width: '85%',
+    width: '88%',
+    maxWidth: 420,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
+    shadowColor: '#10b981',
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 15,
-    borderWidth: 1,
+    borderWidth: 1.5,
+    borderColor: '#10b981',
   },
   notificationTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginBottom: 15,
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 12,
+    letterSpacing: -0.3,
   },
   notificationText: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: 'center',
-    marginBottom: 10,
-    lineHeight: 22,
+    marginBottom: 8,
+    lineHeight: 21,
   },
   notificationActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    marginTop: 25,
-    gap: 15,
+    marginTop: 20,
+    gap: 12,
   },
   btnAction: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
   },
   btnText: {
     color: 'white',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '800',
+    fontSize: 15,
     letterSpacing: 0.5,
   }
 });
