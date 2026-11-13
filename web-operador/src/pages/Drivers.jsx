@@ -427,8 +427,8 @@ export default function Drivers() {
                     <input type="text" value={editingDriver.datos_pago} onChange={e => setEditingDriver({...editingDriver, datos_pago: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
-                    <label>Modelo de Vehículo</label>
-                    <input type="text" value={editingDriver.vehiculo_modelo} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <label>Marca y Modelo del Vehículo</label>
+                    <input type="text" placeholder="Ej: Chevrolet Corsa, Fiat Cronos..." value={editingDriver.vehiculo_modelo} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Color</label>

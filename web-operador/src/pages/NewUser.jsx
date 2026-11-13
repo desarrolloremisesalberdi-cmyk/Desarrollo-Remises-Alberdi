@@ -157,8 +157,8 @@ export default function NewUser() {
                 <input type="text" name="datos_cobro" value={formData.datos_cobro} onChange={handleChange} required />
               </div>
               <div className="form-group">
-                <label>Modelo del Vehículo</label>
-                <input type="text" name="vehiculo_modelo" value={formData.vehiculo_modelo} onChange={handleChange} required />
+                <label>Marca y Modelo del Vehículo</label>
+                <input type="text" name="vehiculo_modelo" placeholder="Ej: Chevrolet Corsa, Fiat Cronos..." value={formData.vehiculo_modelo} onChange={handleChange} required />
               </div>
               <div className="form-group">
                 <label>Color</label>
