@@ -1,11 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DollarSign, TrendingUp, Calendar, CreditCard, Banknote, User, FileText, X, CheckCircle, Clock } from 'lucide-react';
+import { 
+  DollarSign, 
+  TrendingUp, 
+  Calendar, 
+  CreditCard, 
+  Banknote, 
+  User, 
+  ChevronLeft, 
+  ChevronRight, 
+  FileText, 
+  X, 
+  RotateCcw 
+} from 'lucide-react';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function Finances() {
-  const [filter, setFilter] = useState('quincena_actual');
+  // Modos principales: 'semana', 'quincena', 'mes', 'hoy', 'todo'
+  const [periodType, setPeriodType] = useState('semana');
+  // Para quincenas: 1 (1 al 15) o 2 (16 al fin de mes)
+  const [quincenaHalf, setQuincenaHalf] = useState(new Date().getDate() <= 15 ? 1 : 2);
+  // Offsets de navegación para retroceder / avanzar semanas o meses
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
+
+  // Filtro por Chofer
   const [selectedDriver, setSelectedDriver] = useState('todos');
+
+  // Datos
   const [trips, setTrips] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [tarifas, setTarifas] = useState(null);
@@ -43,7 +65,7 @@ export default function Finances() {
       .catch(err => console.error("Error fetching tarifas:", err));
   }, []);
 
-  // Consolidar opciones de choferes (los de la BD + cualquier chofer que tenga viajes asignados)
+  // Consolidar lista de choferes
   const driverOptions = useMemo(() => {
     const list = [...drivers];
     trips.forEach(t => {
@@ -56,67 +78,110 @@ export default function Finances() {
         });
       }
     });
-    // Ordenar por número de móvil si es posible
     return list.sort((a, b) => Number(a.numero_movil || 0) - Number(b.numero_movil || 0));
   }, [drivers, trips]);
 
-  // Función para determinar si una fecha está en el rango seleccionado
-  const isWithinDateFilter = (fechaStr, filterType) => {
-    if (!fechaStr) return false;
-    const tripDate = new Date(fechaStr);
-    if (isNaN(tripDate.getTime())) return false;
-
+  // Cálculo didáctico del rango de fechas activo
+  const rangeInfo = useMemo(() => {
     const now = new Date();
 
-    switch (filterType) {
-      case 'hoy': {
-        return tripDate.getDate() === now.getDate() &&
-               tripDate.getMonth() === now.getMonth() &&
-               tripDate.getFullYear() === now.getFullYear();
-      }
-
-      case 'quincena_actual': {
-        const isFirstHalf = now.getDate() <= 15;
-        const start = new Date(now.getFullYear(), now.getMonth(), isFirstHalf ? 1 : 16, 0, 0, 0);
-        const end = isFirstHalf
-          ? new Date(now.getFullYear(), now.getMonth(), 15, 23, 59, 59, 999)
-          : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        return tripDate >= start && tripDate <= end;
-      }
-
-      case 'ultimos_15_dias': {
-        const fifteenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 15, 0, 0, 0);
-        return tripDate >= fifteenDaysAgo && tripDate <= now;
-      }
-
-      case 'quincena_1': {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), 15, 23, 59, 59, 999);
-        return tripDate >= start && tripDate <= end;
-      }
-
-      case 'quincena_2': {
-        const start = new Date(now.getFullYear(), now.getMonth(), 16, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        return tripDate >= start && tripDate <= end;
-      }
-
-      case 'semana': {
-        const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
-        return tripDate >= sevenDaysAgo && tripDate <= now;
-      }
-
-      case 'mes': {
-        return tripDate.getMonth() === now.getMonth() && tripDate.getFullYear() === now.getFullYear();
-      }
-
-      case 'todos':
-      default:
-        return true;
+    if (periodType === 'todo') {
+      return {
+        start: null,
+        end: null,
+        badge: 'Historial',
+        label: 'Histórico Completo (Sin límite de fecha)',
+        sublabel: 'Mostrando la totalidad de viajes registrados en el sistema'
+      };
     }
-  };
 
-  // Filtrado de viajes aplicando Chofer y Fecha
+    if (periodType === 'hoy') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const dayName = now.toLocaleDateString('es-AR', { weekday: 'long' });
+      const formatted = now.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+      return {
+        start,
+        end,
+        badge: 'Hoy',
+        label: `Hoy: ${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${formatted}`,
+        sublabel: 'Viajes realizados en la jornada de hoy (00:00 a 23:59 hs)'
+      };
+    }
+
+    if (periodType === 'semana') {
+      // Semana en curso: De Domingo a Domingo
+      const target = new Date(now);
+      if (weekOffset !== 0) {
+        target.setDate(target.getDate() + (weekOffset * 7));
+      }
+      const dayOfWeek = target.getDay(); // 0 es Domingo
+      // Domingo que inicia la semana
+      const start = new Date(target.getFullYear(), target.getMonth(), target.getDate() - dayOfWeek, 0, 0, 0, 0);
+      // Domingo que cierra la semana (7 días después a las 23:59:59)
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7, 23, 59, 59, 999);
+
+      const monthName = end.toLocaleDateString('es-AR', { month: 'long' });
+      const year = end.getFullYear();
+
+      return {
+        start,
+        end,
+        badge: weekOffset === 0 ? 'Semana en Curso' : (weekOffset === -1 ? 'Semana Anterior' : 'Semana Seleccionada'),
+        label: `Semana: Domingo ${start.getDate()} al Domingo ${end.getDate()} de ${monthName} de ${year}`,
+        sublabel: 'Filtro de domingo a domingo (7 días completos con cierre el domingo a las 23:59 hs)'
+      };
+    }
+
+    if (periodType === 'quincena') {
+      const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+      const monthName = target.toLocaleDateString('es-AR', { month: 'long' });
+      const year = target.getFullYear();
+
+      if (quincenaHalf === 1) {
+        const start = new Date(target.getFullYear(), target.getMonth(), 1, 0, 0, 0, 0);
+        const end = new Date(target.getFullYear(), target.getMonth(), 15, 23, 59, 59, 999);
+        return {
+          start,
+          end,
+          badge: '1ª Quincena',
+          label: `1ª Quincena de ${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year} (1 al 15)`,
+          sublabel: `Liquidación del 01 al 15 de ${monthName} de ${year}`
+        };
+      } else {
+        const start = new Date(target.getFullYear(), target.getMonth(), 16, 0, 0, 0, 0);
+        const end = new Date(target.getFullYear(), target.getMonth(), lastDay, 23, 59, 59, 999);
+        return {
+          start,
+          end,
+          badge: '2ª Quincena',
+          label: `2ª Quincena de ${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year} (16 al ${lastDay})`,
+          sublabel: `Liquidación del 16 al ${lastDay} de ${monthName} de ${year}`
+        };
+      }
+    }
+
+    if (periodType === 'mes') {
+      const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+      const monthName = target.toLocaleDateString('es-AR', { month: 'long' });
+      const year = target.getFullYear();
+      const start = new Date(target.getFullYear(), target.getMonth(), 1, 0, 0, 0, 0);
+      const end = new Date(target.getFullYear(), target.getMonth(), lastDay, 23, 59, 59, 999);
+      return {
+        start,
+        end,
+        badge: 'Mes Completo',
+        label: `Mes de ${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`,
+        sublabel: `Del 01 al ${lastDay} de ${monthName} de ${year}`
+      };
+    }
+
+    return { start: null, end: null, badge: '', label: '', sublabel: '' };
+  }, [periodType, quincenaHalf, weekOffset, monthOffset]);
+
+  // Filtrado de viajes aplicando Chofer y Rango de Fecha activo
   const filteredTrips = useMemo(() => {
     return trips.filter(trip => {
       // 1. Filtro de Chofer
@@ -131,10 +196,17 @@ export default function Finances() {
         }
       }
 
-      // 2. Filtro de Fecha / Período
-      return isWithinDateFilter(trip.fecha, filter);
+      // 2. Filtro por Rango de Fecha
+      if (rangeInfo.start && rangeInfo.end) {
+        if (!trip.fecha) return false;
+        const tripDate = new Date(trip.fecha);
+        if (isNaN(tripDate.getTime())) return false;
+        if (tripDate < rangeInfo.start || tripDate > rangeInfo.end) return false;
+      }
+
+      return true;
     });
-  }, [trips, selectedDriver, filter, driverOptions]);
+  }, [trips, selectedDriver, rangeInfo, driverOptions]);
 
   // Cálculos sobre los viajes filtrados
   const completedTrips = useMemo(() => filteredTrips.filter(t => t.estado === 'finalizado'), [filteredTrips]);
@@ -146,32 +218,76 @@ export default function Finances() {
   // Info del chofer seleccionado si no es 'todos'
   const currentDriverObj = driverOptions.find(d => String(d.id) === String(selectedDriver));
 
-  // Etiquetas para las opciones del selector de fecha
-  const now = new Date();
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const currentMonthName = monthNames[now.getMonth()];
-  const isFirstHalf = now.getDate() <= 15;
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-
   return (
     <div className="page-container">
-      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+      <header className="page-header" style={{ marginBottom: '15px' }}>
         <div>
           <h1>Reportes y Finanzas</h1>
           <p style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
-            Liquidaciones de choferes, comisiones de agencia y auditoría de viajes
+            Control de caja, liquidaciones a choferes y auditoría de recaudación
           </p>
         </div>
+      </header>
 
-        <div className="filter-group">
-          {/* Selector de Chofer */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <User size={18} color="#94a3b8" />
-            <select 
-              value={selectedDriver} 
-              onChange={(e) => setSelectedDriver(e.target.value)} 
-              className="date-filter"
-              title="Filtrar por Chofer"
+      {/* PANEL DIDÁCTICO DE FILTROS: PERÍODO Y CHOFER */}
+      <div className="period-control-card">
+        {/* Fila 1: Botones de Modo de Período y Filtro de Chofer */}
+        <div className="period-control-top">
+          {/* Botones didácticos de período */}
+          <div className="period-tabs">
+            <button
+              type="button"
+              className={`period-tab ${periodType === 'semana' ? 'active' : ''}`}
+              onClick={() => { setPeriodType('semana'); setWeekOffset(0); }}
+            >
+              <Calendar size={14} /> Semana
+            </button>
+
+            <button
+              type="button"
+              className={`period-tab ${periodType === 'quincena' ? 'active' : ''}`}
+              onClick={() => { 
+                setPeriodType('quincena'); 
+                setMonthOffset(0); 
+                setQuincenaHalf(new Date().getDate() <= 15 ? 1 : 2);
+              }}
+            >
+              <Calendar size={14} /> Quincena
+            </button>
+
+            <button
+              type="button"
+              className={`period-tab ${periodType === 'mes' ? 'active' : ''}`}
+              onClick={() => { setPeriodType('mes'); setMonthOffset(0); }}
+            >
+              <Calendar size={14} /> Mensual
+            </button>
+
+            <button
+              type="button"
+              className={`period-tab ${periodType === 'hoy' ? 'active' : ''}`}
+              onClick={() => { setPeriodType('hoy'); }}
+            >
+              Hoy
+            </button>
+
+            <button
+              type="button"
+              className={`period-tab ${periodType === 'todo' ? 'active' : ''}`}
+              onClick={() => { setPeriodType('todo'); }}
+            >
+              Histórico
+            </button>
+          </div>
+
+          {/* Filtro por Chofer */}
+          <div className="driver-selector-box">
+            <User size={16} color="#60a5fa" />
+            <span style={{ fontSize: '13px', color: '#94a3b8' }}>Chofer:</span>
+            <select
+              value={selectedDriver}
+              onChange={(e) => setSelectedDriver(e.target.value)}
+              className="driver-select"
             >
               <option value="todos">Todos los Choferes</option>
               {driverOptions.map(driver => (
@@ -182,32 +298,135 @@ export default function Finances() {
               <option value="sin_asignar">Sin Asignar</option>
             </select>
           </div>
-
-          {/* Selector de Período / Quincena */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Calendar size={18} color="#94a3b8" />
-            <select 
-              value={filter} 
-              onChange={(e) => setFilter(e.target.value)} 
-              className="date-filter"
-              title="Filtrar por Período / Quincena"
-            >
-              <option value="quincena_actual">
-                Quincena Actual ({isFirstHalf ? '1 al 15' : `16 al ${lastDayOfMonth}`} de {currentMonthName})
-              </option>
-              <option value="ultimos_15_dias">Últimos 15 Días</option>
-              <option value="quincena_1">1ª Quincena (1 al 15 de {currentMonthName})</option>
-              <option value="quincena_2">2ª Quincena (16 al {lastDayOfMonth} de {currentMonthName})</option>
-              <option value="hoy">Hoy</option>
-              <option value="semana">Esta Semana (Últimos 7 días)</option>
-              <option value="mes">Este Mes ({currentMonthName})</option>
-              <option value="todos">Histórico Completo</option>
-            </select>
-          </div>
         </div>
-      </header>
 
-      {/* Tarjetas KPI */}
+        {/* Fila 2: Explicación Didáctica del Rango y Sub-controles de Navegación */}
+        <div className="period-control-bottom">
+          <div className="period-description">
+            <div className="period-main-text">
+              <span className="badge-tag">{rangeInfo.badge}</span>
+              <strong>{rangeInfo.label}</strong>
+            </div>
+            <span className="period-sub-text">{rangeInfo.sublabel}</span>
+          </div>
+
+          {/* Sub-controles dinámicos según el modo seleccionado */}
+          {periodType === 'semana' && (
+            <div className="sub-controls-group">
+              <button
+                type="button"
+                className="arrow-btn"
+                onClick={() => setWeekOffset(prev => prev - 1)}
+                title="Semana anterior de domingo a domingo"
+              >
+                <ChevronLeft size={15} /> Semana anterior
+              </button>
+
+              {weekOffset !== 0 && (
+                <button
+                  type="button"
+                  className="reset-btn"
+                  onClick={() => setWeekOffset(0)}
+                  title="Volver a la semana en curso"
+                >
+                  <RotateCcw size={12} style={{ display: 'inline', marginRight: 4 }} /> Semana actual
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="arrow-btn"
+                onClick={() => setWeekOffset(prev => prev + 1)}
+                title="Semana siguiente de domingo a domingo"
+              >
+                Semana siguiente <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
+
+          {periodType === 'quincena' && (
+            <div className="sub-controls-group">
+              <button
+                type="button"
+                className={`half-btn ${quincenaHalf === 1 ? 'active' : ''}`}
+                onClick={() => setQuincenaHalf(1)}
+              >
+                1ª Quincena (1 al 15)
+              </button>
+              <button
+                type="button"
+                className={`half-btn ${quincenaHalf === 2 ? 'active' : ''}`}
+                onClick={() => setQuincenaHalf(2)}
+              >
+                2ª Quincena (16 al fin)
+              </button>
+
+              <button
+                type="button"
+                className="arrow-btn"
+                onClick={() => setMonthOffset(prev => prev - 1)}
+                title="Mes anterior"
+                style={{ marginLeft: 6 }}
+              >
+                <ChevronLeft size={15} /> Mes ant.
+              </button>
+
+              {monthOffset !== 0 && (
+                <button
+                  type="button"
+                  className="reset-btn"
+                  onClick={() => setMonthOffset(0)}
+                >
+                  Mes actual
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="arrow-btn"
+                onClick={() => setMonthOffset(prev => prev + 1)}
+                title="Mes siguiente"
+              >
+                Mes sig. <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
+
+          {periodType === 'mes' && (
+            <div className="sub-controls-group">
+              <button
+                type="button"
+                className="arrow-btn"
+                onClick={() => setMonthOffset(prev => prev - 1)}
+                title="Mes anterior"
+              >
+                <ChevronLeft size={15} /> Mes anterior
+              </button>
+
+              {monthOffset !== 0 && (
+                <button
+                  type="button"
+                  className="reset-btn"
+                  onClick={() => setMonthOffset(0)}
+                >
+                  Mes actual
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="arrow-btn"
+                onClick={() => setMonthOffset(prev => prev + 1)}
+                title="Mes siguiente"
+              >
+                Mes siguiente <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tarjetas KPI de Resumen */}
       <div className="kpi-grid">
         <div className="kpi-card total">
           <div className="kpi-icon"><DollarSign size={24} /></div>
@@ -250,6 +469,7 @@ export default function Finances() {
           <h2><TrendingUp size={20} style={{ marginRight: 10 }} /> Historial de Viajes</h2>
           <span style={{ fontSize: '13px', color: '#94a3b8' }}>
             Mostrando {filteredTrips.length} {filteredTrips.length === 1 ? 'registro' : 'registros'}
+            {selectedDriver !== 'todos' && currentDriverObj ? ` de Móvil #${currentDriverObj.numero_movil}` : ''}
           </span>
         </div>
         <table className="trips-table">
@@ -268,7 +488,7 @@ export default function Finances() {
             {filteredTrips.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ textAlign: 'center', padding: '35px', color: '#94a3b8' }}>
-                  No se encontraron viajes para los filtros seleccionados
+                  No se encontraron viajes para el período y chofer seleccionados
                 </td>
               </tr>
             ) : (
