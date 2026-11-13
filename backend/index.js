@@ -600,11 +600,16 @@ app.post('/api/choferes/register', async (req, res) => {
     fotoDniUrl = foto_dni_base64 || null;
     fotoAutoUrl = foto_auto_base64 || null;
 
+    const safeFechaNacimiento = (fecha_nacimiento && String(fecha_nacimiento).trim() !== '') ? String(fecha_nacimiento).trim() : null;
+    const safeLicenciaVencimiento = (licencia_vencimiento && String(licencia_vencimiento).trim() !== '') ? String(licencia_vencimiento).trim() : null;
+    const safeEmail = (email && String(email).trim() !== '') ? String(email).trim() : null;
+    const safeNumeroMovil = (numero_movil !== undefined && numero_movil !== null && String(numero_movil).trim() !== '') ? parseInt(numero_movil, 10) : null;
+
     const result = await db.query(
       `INSERT INTO choferes 
        (nombre, apellido, email, clave, telefono, domicilio, dni, fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_pago, foto_url, dni_foto_url, vehiculo_foto_url, estado, created_at) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'inactivo', NOW()) RETURNING *`,
-      [nombre, apellido, email, defaultPassword, telefono, domicilio, dni, fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl]
+      [nombre, apellido, safeEmail, defaultPassword, telefono, domicilio, dni, safeFechaNacimiento, safeLicenciaVencimiento, safeNumeroMovil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl]
     );
 
     res.json({ success: true, chofer: result.rows[0] });
@@ -1509,23 +1514,78 @@ app.post('/api/choferes/toggle-suspend', async (req, res) => {
 // Editing driver
 app.put('/api/choferes/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, domicilio, telefono, email, fecha_nacimiento, vehiculo_color, foto_perfil_base64, foto_dni_base64, foto_auto_base64 } = req.body;
+  const { 
+    nombre, 
+    apellido, 
+    dni, 
+    numero_movil, 
+    vehiculo_modelo, 
+    vehiculo_patente, 
+    vencimiento_carnet, 
+    datos_pago, 
+    domicilio, 
+    telefono, 
+    email, 
+    fecha_nacimiento, 
+    vehiculo_color, 
+    foto_perfil_base64, 
+    foto_dni_base64, 
+    foto_auto_base64 
+  } = req.body;
+
   try {
+    const safeFechaNacimiento = (fecha_nacimiento && String(fecha_nacimiento).trim() !== '') ? String(fecha_nacimiento).trim() : null;
+    const safeVencimientoCarnet = (vencimiento_carnet && String(vencimiento_carnet).trim() !== '') ? String(vencimiento_carnet).trim() : null;
+    const safeEmail = (email && String(email).trim() !== '') ? String(email).trim() : null;
+    const safeNumeroMovil = (numero_movil !== undefined && numero_movil !== null && String(numero_movil).trim() !== '') ? parseInt(numero_movil, 10) : null;
+    const safeId = isNaN(Number(id)) ? id : Number(id);
+
     // Si viene la foto base64, la actualizamos, si no, mantenemos la existente.
     const updateQuery = `
       UPDATE choferes 
-      SET nombre = $1, apellido = $2, dni = $3, numero_movil = $4, vehiculo_modelo = $5, vehiculo_patente = $6, licencia_vencimiento = $7, datos_pago = $8, domicilio = $9, telefono = $10, email = $11, fecha_nacimiento = $12, vehiculo_color = $13,
-      foto_url = COALESCE($14, foto_url),
-      dni_foto_url = COALESCE($15, dni_foto_url),
-      vehiculo_foto_url = COALESCE($16, vehiculo_foto_url)
+      SET nombre = $1, 
+          apellido = $2, 
+          dni = $3, 
+          numero_movil = $4, 
+          vehiculo_modelo = $5, 
+          vehiculo_patente = $6, 
+          licencia_vencimiento = $7, 
+          datos_pago = $8, 
+          domicilio = $9, 
+          telefono = $10, 
+          email = $11, 
+          fecha_nacimiento = $12, 
+          vehiculo_color = $13,
+          foto_url = COALESCE($14, foto_url),
+          dni_foto_url = COALESCE($15, dni_foto_url),
+          vehiculo_foto_url = COALESCE($16, vehiculo_foto_url)
       WHERE id = $17 RETURNING *
     `;
-    const values = [nombre, apellido, dni, numero_movil, vehiculo_modelo, vehiculo_patente, vencimiento_carnet, datos_pago, domicilio, telefono, email, fecha_nacimiento, vehiculo_color, foto_perfil_base64 || null, foto_dni_base64 || null, foto_auto_base64 || null, id];
+    const values = [
+      nombre, 
+      apellido, 
+      dni, 
+      safeNumeroMovil, 
+      vehiculo_modelo || null, 
+      vehiculo_patente || null, 
+      safeVencimientoCarnet, 
+      datos_pago || null, 
+      domicilio || null, 
+      telefono || null, 
+      safeEmail, 
+      safeFechaNacimiento, 
+      vehiculo_color || null, 
+      foto_perfil_base64 || null, 
+      foto_dni_base64 || null, 
+      foto_auto_base64 || null, 
+      safeId
+    ];
+
     const result = await db.query(updateQuery, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Chofer no encontrado' });
     res.json({ success: true, chofer: result.rows[0] });
   } catch (error) {
     console.error('Error actualizando chofer:', error);
-    res.status(500).json({ success: false, error: 'Error del servidor' });
+    res.status(500).json({ success: false, error: error.message || 'Error del servidor' });
   }
 });

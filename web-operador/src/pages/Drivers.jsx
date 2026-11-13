@@ -89,10 +89,23 @@ export default function Drivers() {
   const handleUpdateDriver = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...editingDriver,
+        nombre: editingDriver.nombre ? editingDriver.nombre.trim() : '',
+        apellido: editingDriver.apellido ? editingDriver.apellido.trim() : '',
+        dni: editingDriver.dni ? editingDriver.dni.trim() : '',
+        telefono: editingDriver.telefono ? editingDriver.telefono.trim() : '',
+        domicilio: editingDriver.domicilio ? editingDriver.domicilio.trim() : '',
+        fecha_nacimiento: (editingDriver.fecha_nacimiento && editingDriver.fecha_nacimiento.trim() !== '') ? editingDriver.fecha_nacimiento.trim() : null,
+        vencimiento_carnet: (editingDriver.vencimiento_carnet && editingDriver.vencimiento_carnet.trim() !== '') ? editingDriver.vencimiento_carnet.trim() : null,
+        email: (editingDriver.email && editingDriver.email.trim() !== '') ? editingDriver.email.trim() : null,
+        numero_movil: (editingDriver.numero_movil !== undefined && editingDriver.numero_movil !== null && String(editingDriver.numero_movil).trim() !== '') ? parseInt(editingDriver.numero_movil, 10) : null
+      };
+
       const res = await fetch(`https://desarrollo-remises-alberdi.onrender.com/api/choferes/${editingDriver.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingDriver)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
@@ -100,6 +113,7 @@ export default function Drivers() {
         const updatedList = driversList.map(d => {
           if (d.id === editingDriver.id) {
             return {
+              ...d,
               ...data.chofer,
               nombreCompleto: `${data.chofer.nombre} ${data.chofer.apellido}`,
               dni: data.chofer.dni,
@@ -115,11 +129,12 @@ export default function Drivers() {
         setDriversList(updatedList);
         setSelectedDriver(updatedList.find(d => d.id === editingDriver.id));
         setEditingDriver(null);
+        alert('Chofer actualizado correctamente');
       } else {
         alert(data.error || 'Error al actualizar');
       }
     } catch (error) {
-      alert('Error de red');
+      alert('Error de red: ' + error.message);
     }
   };
 
@@ -383,35 +398,35 @@ export default function Drivers() {
                 <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                   <div className="form-group">
                     <label>Nombre</label>
-                    <input type="text" value={editingDriver.nombre} onChange={e => setEditingDriver({...editingDriver, nombre: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.nombre || ''} onChange={e => setEditingDriver({...editingDriver, nombre: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Apellido</label>
-                    <input type="text" value={editingDriver.apellido} onChange={e => setEditingDriver({...editingDriver, apellido: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.apellido || ''} onChange={e => setEditingDriver({...editingDriver, apellido: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>DNI</label>
-                    <input type="text" value={editingDriver.dni} onChange={e => setEditingDriver({...editingDriver, dni: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.dni || ''} onChange={e => setEditingDriver({...editingDriver, dni: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Teléfono</label>
-                    <input type="tel" value={editingDriver.telefono} onChange={e => setEditingDriver({...editingDriver, telefono: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="tel" value={editingDriver.telefono || ''} onChange={e => setEditingDriver({...editingDriver, telefono: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Email</label>
-                    <input type="email" value={editingDriver.email} onChange={e => setEditingDriver({...editingDriver, email: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="email" value={editingDriver.email || ''} onChange={e => setEditingDriver({...editingDriver, email: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Fecha de Nacimiento</label>
-                    <input type="date" value={editingDriver.fecha_nacimiento} onChange={e => setEditingDriver({...editingDriver, fecha_nacimiento: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="date" value={editingDriver.fecha_nacimiento || ''} onChange={e => setEditingDriver({...editingDriver, fecha_nacimiento: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label>Domicilio</label>
-                    <input type="text" value={editingDriver.domicilio} onChange={e => setEditingDriver({...editingDriver, domicilio: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.domicilio || ''} onChange={e => setEditingDriver({...editingDriver, domicilio: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label>Vencimiento Carnet de Conducir</label>
-                    <input type="date" value={editingDriver.vencimiento_carnet} onChange={e => setEditingDriver({...editingDriver, vencimiento_carnet: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="date" value={editingDriver.vencimiento_carnet || ''} onChange={e => setEditingDriver({...editingDriver, vencimiento_carnet: e.target.value})} required style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                 </div>
               )}
@@ -420,23 +435,23 @@ export default function Drivers() {
                 <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                   <div className="form-group">
                     <label>Número de Móvil</label>
-                    <input type="number" value={editingDriver.numero_movil} onChange={e => setEditingDriver({...editingDriver, numero_movil: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="number" value={editingDriver.numero_movil || ''} onChange={e => setEditingDriver({...editingDriver, numero_movil: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Alias / CBU (Pago Anticipado)</label>
-                    <input type="text" value={editingDriver.datos_pago} onChange={e => setEditingDriver({...editingDriver, datos_pago: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.datos_pago || ''} onChange={e => setEditingDriver({...editingDriver, datos_pago: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Marca y Modelo del Vehículo</label>
-                    <input type="text" placeholder="Ej: Chevrolet Corsa, Fiat Cronos..." value={editingDriver.vehiculo_modelo} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" placeholder="Ej: Chevrolet Corsa, Fiat Cronos..." value={editingDriver.vehiculo_modelo || ''} onChange={e => setEditingDriver({...editingDriver, vehiculo_modelo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Color</label>
-                    <input type="text" value={editingDriver.vehiculo_color} onChange={e => setEditingDriver({...editingDriver, vehiculo_color: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.vehiculo_color || ''} onChange={e => setEditingDriver({...editingDriver, vehiculo_color: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                   <div className="form-group">
                     <label>Patente</label>
-                    <input type="text" value={editingDriver.vehiculo_patente} onChange={e => setEditingDriver({...editingDriver, vehiculo_patente: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
+                    <input type="text" value={editingDriver.vehiculo_patente || ''} onChange={e => setEditingDriver({...editingDriver, vehiculo_patente: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#374151', color: 'white', border: 'none' }} />
                   </div>
                 </div>
               )}
