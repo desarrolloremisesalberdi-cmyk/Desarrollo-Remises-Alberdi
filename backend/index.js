@@ -1316,15 +1316,15 @@ app.get('/api/choferes', async (req, res) => {
 app.get('/api/finanzas/admin', async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT v.id, v.estado, v.monto_calculado, v.comision_admin, v.distancia_km, 
-             v.metodo_pago, v.created_at as fecha,
+      SELECT v.id, v.chofer_id, v.usuario_id, v.estado, v.monto_calculado, v.comision_admin, v.distancia_km, 
+             v.metodo_pago, v.comprobante_url, v.comprobante_estado, v.created_at as fecha,
              c.nombre as chofer_nombre, c.apellido as chofer_apellido, c.numero_movil,
              u.nombre as pasajero_nombre, u.apellido as pasajero_apellido
       FROM viajes v
       LEFT JOIN choferes c ON v.chofer_id = c.id
       LEFT JOIN usuarios u ON v.usuario_id = u.id
       ORDER BY v.created_at DESC
-      LIMIT 100
+      LIMIT 500
     `);
     res.json({ success: true, viajes: result.rows });
   } catch (error) {
