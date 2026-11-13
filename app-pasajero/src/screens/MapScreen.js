@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image, TextInput, ActivityIndicator, Vibration, Alert, Modal, ScrollView, Linking } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
 export default function MapScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
+  const mapRef = useRef(null);
   const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [solicitando, setSolicitando] = useState(false);
@@ -123,6 +126,15 @@ export default function MapScreen({ route, navigation }) {
       const { latitude, longitude } = pos.coords;
       setCoordsOrigen({ lat: latitude, lng: longitude });
       setUsandoUbicacionActual(true);
+
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.015,
+          longitudeDelta: 0.015,
+        }, 1000);
+      }
 
       let direccionTexto = 'Mi ubicación actual';
       try {
@@ -661,21 +673,20 @@ export default function MapScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {/* Mapa Nativo (Google Maps / Apple Maps) */}
+      {/* Mapa Nativo (Google Maps) */}
       <MapView
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={{
           latitude: -33.044167,
           longitude: -61.168056,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+          latitudeDelta: 0.04,
+          longitudeDelta: 0.04,
         }}
-        region={coordsOrigen ? {
-          latitude: coordsOrigen.lat,
-          longitude: coordsOrigen.lng,
-          latitudeDelta: 0.015,
-          longitudeDelta: 0.015,
-        } : undefined}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
+        showsCompass={false}
       >
         {coordsOrigen && <Marker coordinate={{ latitude: coordsOrigen.lat, longitude: coordsOrigen.lng }} title="Origen" pinColor="blue" />}
         {coordsDestino && <Marker coordinate={{ latitude: coordsDestino.lat, longitude: coordsDestino.lng }} title="Destino" pinColor="red" />}
@@ -724,7 +735,7 @@ export default function MapScreen({ route, navigation }) {
         </View>
       )}
       
-      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg }]}>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, paddingBottom: Math.max(insets.bottom + 20, 48) }]}>
         {/* Barra superior estilizada tipo bottom-sheet */}
         <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 14 }} />
 
@@ -808,7 +819,19 @@ export default function MapScreen({ route, navigation }) {
                       onPress={(data, details = null) => {
                         setUsandoUbicacionActual(false);
                         setOrigenTexto(data.description);
-                        setCoordsOrigen({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
+                        if (details?.geometry?.location) {
+                          const lat = details.geometry.location.lat;
+                          const lng = details.geometry.location.lng;
+                          setCoordsOrigen({ lat, lng });
+                          if (mapRef.current) {
+                            mapRef.current.animateToRegion({
+                              latitude: lat,
+                              longitude: lng,
+                              latitudeDelta: 0.015,
+                              longitudeDelta: 0.015,
+                            }, 1000);
+                          }
+                        }
                       }}
                       query={{
                         key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
@@ -828,7 +851,29 @@ export default function MapScreen({ route, navigation }) {
                       }}
                       onPress={(data, details = null) => {
                         setDestinoTexto(data.description);
-                        setCoordsDestino({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
+                        if (details?.geometry?.location) {
+                          const destLat = details.geometry.location.lat;
+                          const destLng = details.geometry.location.lng;
+                          setCoordsDestino({ lat: destLat, lng: destLng });
+                          if (mapRef.current) {
+                            if (coordsOrigen) {
+                              mapRef.current.fitToCoordinates([
+                                { latitude: coordsOrigen.lat, longitude: coordsOrigen.lng },
+                                { latitude: destLat, longitude: destLng }
+                              ], {
+                                edgePadding: { top: 120, right: 60, bottom: 380, left: 60 },
+                                animated: true,
+                              });
+                            } else {
+                              mapRef.current.animateToRegion({
+                                latitude: destLat,
+                                longitude: destLng,
+                                latitudeDelta: 0.015,
+                                longitudeDelta: 0.015,
+                              }, 1000);
+                            }
+                          }
+                        }
                       }}
                       query={{
                         key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
@@ -1590,7 +1635,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   bottomCard: {
     position: 'absolute',
@@ -1598,7 +1649,7 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 48,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1.5,
