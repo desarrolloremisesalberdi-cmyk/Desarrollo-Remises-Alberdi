@@ -530,12 +530,12 @@ export default function MainScreen({ route, navigation }) {
         ]} />
         <Text style={[styles.statusText, { color: '#f8fafc' }]}>
           {viajeTelefonicoActivo 
-            ? '📞 VIAJE TELEFÓNICO EN CURSO' 
-            : (isOnline ? '🟢 EN LÍNEA • DISPONIBLE PARA VIAJES' : '🔴 FUERA DE SERVICIO • EN PAUSA')}
+            ? 'VIAJE TELEFÓNICO EN CURSO' 
+            : (isOnline ? 'EN LÍNEA • DISPONIBLE PARA VIAJES' : 'FUERA DE SERVICIO • EN PAUSA')}
         </Text>
       </View>
 
-      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg }]}>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, paddingBottom: 40 }]}>
         {/* Barra superior estilo bottom-sheet */}
         <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 12 }} />
 

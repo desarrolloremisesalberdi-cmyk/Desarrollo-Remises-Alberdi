@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image, Dimensions } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function MainScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
+  const mapRef = useRef(null);
   const [isOnline, setIsOnline] = useState(false);
   const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [activeTrip, setActiveTrip] = useState(null);
@@ -212,6 +215,31 @@ export default function MainScreen({ route, navigation }) {
     return () => clearInterval(heartbeat);
   }, [socket, chofer, isOnline, activeTrip]);
 
+  // Obtener ubicación inicial inmediatamente al cargar la pantalla
+  useEffect(() => {
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          let currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (currentLoc && currentLoc.coords) {
+            setLocation(currentLoc.coords);
+            if (mapRef.current) {
+              mapRef.current.animateToRegion({
+                latitude: currentLoc.coords.latitude,
+                longitude: currentLoc.coords.longitude,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+              }, 800);
+            }
+          }
+        }
+      } catch (err) {
+        console.log('Error obteniendo ubicacion inicial:', err);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     let subscription = null;
     
@@ -247,6 +275,14 @@ export default function MainScreen({ route, navigation }) {
           (loc) => {
             const { latitude, longitude } = loc.coords;
             setLocation({ latitude, longitude });
+            if (mapRef.current) {
+              mapRef.current.animateToRegion({
+                latitude,
+                longitude,
+                latitudeDelta: 0.015,
+                longitudeDelta: 0.015,
+              }, 600);
+            }
             if (socket && chofer) {
               socket.emit('update_location', {
                 chofer_id: chofer.id,
@@ -504,25 +540,24 @@ export default function MainScreen({ route, navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <MapView
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={{
           latitude: -33.044167, 
           longitude: -61.168056,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+          latitudeDelta: 0.04,
+          longitudeDelta: 0.04,
         }}
-        region={location ? {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        } : undefined}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
+        showsCompass={false}
       >
         {location && (
           <Marker
             coordinate={{ latitude: location.latitude, longitude: location.longitude }}
-            title="Mi Ubicación"
-            pinColor="blue"
+            title="Mi Taxi Alberdi"
+            description={`Móvil #${chofer.numero_movil || '14'}`}
           />
         )}
       </MapView>
@@ -581,16 +616,20 @@ export default function MainScreen({ route, navigation }) {
           styles.statusIndicator, 
           { 
             backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (isOnline ? '#10b981' : '#ef4444'),
+            shadowColor: isOnline ? '#10b981' : '#ef4444',
+            shadowOpacity: 0.8,
+            shadowRadius: 6,
+            elevation: 4,
           }
         ]} />
         <Text style={[styles.statusText, { color: '#f8fafc' }]}>
           {viajeTelefonicoActivo 
-            ? '📞 VIAJE TELEFÓNICO EN CURSO' 
-            : (isOnline ? '🟢 EN LÍNEA • DISPONIBLE PARA VIAJES' : '🔴 FUERA DE SERVICIO • EN PAUSA')}
+            ? 'VIAJE TELEFÓNICO EN CURSO' 
+            : (isOnline ? 'EN LÍNEA • DISPONIBLE PARA VIAJES' : 'FUERA DE SERVICIO • EN PAUSA')}
         </Text>
       </View>
 
-      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg }]}>
+      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, paddingBottom: Math.max(insets.bottom + 20, 48) }]}>
         {/* Barra superior estilo bottom-sheet */}
         <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 12 }} />
 
@@ -779,7 +818,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   header: {
     position: 'absolute',
@@ -809,8 +854,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingTop: 14,
+    paddingBottom: 40,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1.5,

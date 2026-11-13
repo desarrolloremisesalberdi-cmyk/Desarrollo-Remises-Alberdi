@@ -107,8 +107,10 @@ export default function ResumenScreen({ route, navigation }) {
                 elevation: 3
               }]}>
                 <View style={styles.row}>
-                  <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>#{viaje.id.substring(0,6)}...</Text>
-                  <Text style={{ color: '#64748b', fontSize: 12 }}>{new Date(viaje.fecha).toLocaleString()}</Text>
+                  <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>#{String(viaje.id)}</Text>
+                  <Text style={{ color: '#64748b', fontSize: 12 }}>
+                    {viaje.fecha ? new Date(viaje.fecha).toLocaleString() : (viaje.created_at ? new Date(viaje.created_at).toLocaleString() : 'Reciente')}
+                  </Text>
                 </View>
                 <View style={styles.row}>
                   <Text style={{ color: '#94a3b8' }}>Pasajero:</Text>
