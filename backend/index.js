@@ -57,6 +57,23 @@ async function initCalificacionesTable() {
           etiquetas TEXT,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
+
+        -- Columnas para comprobante de pago anticipado y método de pago
+        BEGIN
+          ALTER TABLE viajes ADD COLUMN comprobante_url TEXT;
+        EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE viajes ADD COLUMN comprobante_estado VARCHAR(20) DEFAULT NULL;
+        EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE viajes ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo';
+        EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE viajes ADD COLUMN es_fuera_de_casilda BOOLEAN DEFAULT FALSE;
+        EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE viajes ADD COLUMN origen_direccion TEXT;
+        EXCEPTION WHEN duplicate_column THEN END;
       END $$;
     `);
     console.log('✅ Tablas y columnas de calificación verificadas correctamente');
@@ -288,14 +305,28 @@ app.get('/api/choferes/cercanos', async (req, res) => {
 
 // Solicitar un viaje
 app.post('/api/viajes/request', async (req, res) => {
-  const { usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, destino_fijo_id, costo_fijo, chofer_destinado_id } = req.body;
+  const { 
+    usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, 
+    destino_fijo_id, costo_fijo, chofer_destinado_id,
+    metodo_pago, origen_direccion, es_fuera_de_casilda 
+  } = req.body;
+
   try {
     const newViaje = await db.query(
-      'INSERT INTO viajes (usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, destino_fijo_id, costo_fijo, estado, hora_inicio) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *',
-      [usuario_id, origen_lat || -33.044167, origen_lng || -61.168056, destino_lat, destino_lng, destino_fijo_id || null, costo_fijo || null, 'solicitado']
+      'INSERT INTO viajes (usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, destino_fijo_id, costo_fijo, estado, hora_inicio, metodo_pago, es_fuera_de_casilda, origen_direccion) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11) RETURNING *',
+      [
+        usuario_id, origen_lat || -33.044167, origen_lng || -61.168056, destino_lat, destino_lng, 
+        destino_fijo_id || null, costo_fijo || null, 'solicitado',
+        metodo_pago || 'efectivo', es_fuera_de_casilda || false, origen_direccion || ''
+      ]
     );
     const viaje = newViaje.rows[0];
     
+    // Asegurar compatibilidad
+    viaje.metodo_pago = metodo_pago || 'efectivo';
+    viaje.es_fuera_de_casilda = es_fuera_de_casilda || false;
+    viaje.origen_direccion = origen_direccion || '';
+
     // Obtener información del usuario para saber si es jubilado
     const user = await db.query('SELECT es_jubilado, nombre, apellido, dni FROM usuarios WHERE id = $1', [usuario_id]);
     if (user.rows.length > 0) {
@@ -340,6 +371,56 @@ app.post('/api/viajes/request', async (req, res) => {
   } catch (error) {
     console.error('Error al solicitar viaje:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// Subir comprobante de pago anticipado (Pasajero)
+app.post('/api/viajes/comprobante', async (req, res) => {
+  const { viaje_id, comprobante_base64, pasajero_id } = req.body;
+  try {
+    const result = await db.query(
+      "UPDATE viajes SET comprobante_url = $1, comprobante_estado = 'enviado' WHERE id = $2 RETURNING *",
+      [comprobante_base64, viaje_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Viaje no encontrado' });
+    }
+    const viaje = result.rows[0];
+    io.emit('comprobante_recibido', {
+      viaje_id: viaje.id,
+      comprobante_url: comprobante_base64,
+      pasajero_id: viaje.usuario_id,
+      chofer_id: viaje.chofer_id
+    });
+    res.json({ success: true, viaje });
+  } catch (error) {
+    console.error('Error al subir comprobante:', error);
+    res.status(500).json({ success: false, error: 'Error al subir comprobante' });
+  }
+});
+
+// Validar comprobante de pago (Chofer)
+app.post('/api/viajes/validar-comprobante', async (req, res) => {
+  const { viaje_id, chofer_id, estado } = req.body; // 'aprobado' | 'rechazado'
+  try {
+    const result = await db.query(
+      "UPDATE viajes SET comprobante_estado = $1 WHERE id = $2 RETURNING *",
+      [estado, viaje_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Viaje no encontrado' });
+    }
+    const viaje = result.rows[0];
+    io.emit('comprobante_validado', {
+      viaje_id: viaje.id,
+      pasajero_id: viaje.usuario_id,
+      chofer_id: chofer_id,
+      estado: estado
+    });
+    res.json({ success: true, viaje });
+  } catch (error) {
+    console.error('Error al validar comprobante:', error);
+    res.status(500).json({ success: false, error: 'Error al validar comprobante' });
   }
 });
 
@@ -1314,6 +1395,15 @@ io.on('connection', (socket) => {
   // Cuando un pasajero pide viaje directamente por socket (opcional)
   socket.on('request_ride_direct', (data) => {
     socket.broadcast.emit('new_ride_request', data);
+  });
+
+  // Eventos de comprobante de pago anticipado
+  socket.on('subir_comprobante', (data) => {
+    io.emit('comprobante_recibido', data);
+  });
+
+  socket.on('validar_comprobante', (data) => {
+    io.emit('comprobante_validado', data);
   });
 
   socket.on('toggle_espera', (data) => {

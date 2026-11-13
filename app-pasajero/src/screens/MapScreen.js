@@ -5,9 +5,37 @@ import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplet
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
+
+const CASILDA_LAT = -33.044167;
+const CASILDA_LNG = -61.168056;
+const LOCALIDADES_VECINAS = [
+  'sanford', 'pujato', 'fuentes', 'arequito', 'carcaraña', 'carcarana',
+  'los molinos', 'chabas', 'chabás', 'correa', 'villada', 'arnaldi', 'firmat'
+];
+
+const esFueraDeCasilda = (coords, direccionTexto = '') => {
+  const dirLower = (direccionTexto || '').toLowerCase();
+  for (const loc of LOCALIDADES_VECINAS) {
+    if (dirLower.includes(loc)) return true;
+  }
+  if (coords && coords.lat && coords.lng) {
+    const dLat = (coords.lat - CASILDA_LAT) * (Math.PI / 180);
+    const dLon = (coords.lng - CASILDA_LNG) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(CASILDA_LAT * (Math.PI / 180)) * Math.cos(coords.lat * (Math.PI / 180)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    if (dist > 10) return true;
+    if (dist > 6 && !dirLower.includes('casilda')) return true;
+  }
+  return false;
+};
 
 export default function MapScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -20,6 +48,16 @@ export default function MapScreen({ route, navigation }) {
   const [viajeId, setViajeId] = useState(null);
   const [mensajeEspera, setMensajeEspera] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
+
+  // Estados para viaje fuera de Casilda y Comprobante
+  const [modalMetodoPagoFueraCasilda, setModalMetodoPagoFueraCasilda] = useState(false);
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState('transferencia'); // 'transferencia' | 'efectivo'
+  const [esViajeFueraCasilda, setEsViajeFueraCasilda] = useState(false);
+  const [comprobanteBase64, setComprobanteBase64] = useState(null);
+  const [comprobanteUri, setComprobanteUri] = useState(null);
+  const [subiendoComprobante, setSubiendoComprobante] = useState(false);
+  const [comprobanteEnviado, setComprobanteEnviado] = useState(false);
+  const [comprobanteAprobado, setComprobanteAprobado] = useState(false);
   
   const [modalLargaDistancia, setModalLargaDistancia] = useState(false);
   const [destinosFijos, setDestinosFijos] = useState([]);
@@ -164,16 +202,7 @@ export default function MapScreen({ route, navigation }) {
     }
   };
 
-  const iniciarPedidoTaxi = async () => {
-    if (!coordsOrigen) {
-      Alert.alert('Punto de partida requerido', 'Por favor selecciona tu origen o presiona "📍 Usar mi ubicación actual"');
-      return;
-    }
-    if (!coordsDestino) {
-      Alert.alert('Destino requerido', 'Por favor busca y selecciona tu destino en "¿A dónde vas?"');
-      return;
-    }
-    
+  const abrirSeleccionChofer = async () => {
     setCargandoChoferes(true);
     setModalSeleccionChofer(true);
     try {
@@ -234,6 +263,105 @@ export default function MapScreen({ route, navigation }) {
     }
   };
 
+  const iniciarPedidoTaxi = async () => {
+    if (!coordsOrigen) {
+      Alert.alert('Punto de partida requerido', 'Por favor selecciona tu origen o presiona "📍 Usar mi ubicación actual"');
+      return;
+    }
+    if (!coordsDestino) {
+      Alert.alert('Destino requerido', 'Por favor busca y selecciona tu destino en "¿A dónde vas?"');
+      return;
+    }
+
+    const fuera = esFueraDeCasilda(coordsOrigen, origenTexto);
+    setEsViajeFueraCasilda(fuera);
+
+    if (fuera) {
+      setModalMetodoPagoFueraCasilda(true);
+      return;
+    }
+
+    setMetodoPagoSeleccionado('efectivo');
+    abrirSeleccionChofer();
+  };
+
+  const confirmarMetodoPagoFueraCasilda = (metodo) => {
+    setMetodoPagoSeleccionado(metodo);
+    setModalMetodoPagoFueraCasilda(false);
+    abrirSeleccionChofer();
+  };
+
+  const copiarAlias = async (alias) => {
+    try {
+      await Clipboard.setStringAsync(alias);
+      Alert.alert('📋 Copiado al Portapapeles', `El alias "${alias}" se copió con éxito. Abre tu billetera virtual o app bancaria para transferir.`);
+    } catch (e) {
+      Alert.alert('Alias para transferir', alias);
+    }
+  };
+
+  const seleccionarComprobante = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso necesario', 'Requerimos acceso a tus fotos para adjuntar el comprobante.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.6,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setComprobanteUri(asset.uri);
+        setComprobanteBase64(`data:image/jpeg;base64,${asset.base64}`);
+      }
+    } catch (err) {
+      console.error('Error al seleccionar imagen:', err);
+      Alert.alert('Error', 'No se pudo cargar la imagen seleccionada.');
+    }
+  };
+
+  const enviarComprobante = async () => {
+    if (!comprobanteBase64) {
+      Alert.alert('Comprobante requerido', 'Por favor adjunta la captura de tu transferencia antes de enviar.');
+      return;
+    }
+    setSubiendoComprobante(true);
+    try {
+      const res = await fetch(`${API_URL}/api/viajes/comprobante`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: viajeId,
+          comprobante_base64: comprobanteBase64,
+          pasajero_id: user.id
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setComprobanteEnviado(true);
+        socket.emit('subir_comprobante', {
+          viaje_id: viajeId,
+          comprobante_url: comprobanteBase64,
+          pasajero_id: user.id,
+          chofer_id: choferAsignado ? choferAsignado.id : null
+        });
+        Alert.alert('✅ Comprobante Enviado', 'Tu comprobante fue enviado al chofer para su verificación.');
+      } else {
+        Alert.alert('Error', data.error || 'No se pudo enviar el comprobante');
+      }
+    } catch (e) {
+      console.error('Error enviando comprobante:', e);
+      Alert.alert('Error', 'Error de conexión al enviar comprobante.');
+    } finally {
+      setSubiendoComprobante(false);
+    }
+  };
+
   const confirmarPedidoTaxi = async (choferDestinado = null) => {
     setModalSeleccionChofer(false);
     setSolicitando(true);
@@ -248,7 +376,10 @@ export default function MapScreen({ route, navigation }) {
           origen_lng: coordsOrigen.lng,
           destino_lat: coordsDestino.lat,
           destino_lng: coordsDestino.lng,
-          chofer_destinado_id: choferDestinado ? choferDestinado.id : null
+          chofer_destinado_id: choferDestinado ? choferDestinado.id : null,
+          metodo_pago: metodoPagoSeleccionado,
+          es_fuera_de_casilda: esViajeFueraCasilda,
+          origen_direccion: origenTexto
         }),
       });
       
@@ -488,27 +619,31 @@ export default function MapScreen({ route, navigation }) {
         if (data.viaje_id || (data.viaje && data.viaje.id)) {
           setViajeId(data.viaje_id || data.viaje.id);
         }
-        setEstadoViaje(`¡${data.chofer.nombre} está en camino!\nMóvil #${data.chofer.numero_movil}`);
-        setChoferAsignado(data.chofer);
-        Vibration.vibrate(500);
         
-        let requierePagoAnticipado = false;
-        if (data.viaje && data.viaje.costo_fijo) {
-          requierePagoAnticipado = true;
-        } else if (data.viaje && data.viaje.origen_lat && data.viaje.origen_lng) {
-          const CASILDA_LAT = -33.044167;
-          const CASILDA_LNG = -61.168056;
-          const dist = calcularDistancia(data.viaje.origen_lat, data.viaje.origen_lng, CASILDA_LAT, CASILDA_LNG);
-          if (dist > 15) { // Más de 15km de Casilda
-            requierePagoAnticipado = true;
-          }
+        const metodo = data.viaje?.metodo_pago || metodoPagoSeleccionado;
+        if (metodo === 'transferencia') {
+          setEstadoViaje(`¡${data.chofer.nombre} aceptó tu viaje!\nMóvil #${data.chofer.numero_movil}\n💳 Por favor adjunta el comprobante a continuación:`);
+        } else {
+          setEstadoViaje(`¡${data.chofer.nombre} está en camino!\nMóvil #${data.chofer.numero_movil}`);
         }
 
-        if (requierePagoAnticipado && data.chofer.datos_pago) {
-          Alert.alert(
-            'Pago Anticipado Requerido',
-            `Como tu viaje es de larga distancia o fuera de la ciudad, se requiere pago anticipado.\nPor favor transfiere al Alias del chofer: ${data.chofer.datos_pago} y envía el comprobante por WhatsApp al operador.`
-          );
+        setChoferAsignado(data.chofer);
+        Vibration.vibrate(500);
+      }
+    });
+
+    socket.on('comprobante_validado', (data) => {
+      if (data.pasajero_id === user.id || data.viaje_id === viajeId) {
+        if (data.estado === 'aprobado') {
+          setComprobanteAprobado(true);
+          Vibration.vibrate([0, 300, 150, 300]);
+          Alert.alert('✅ Comprobante Verificado', '¡Tu pago fue verificado con éxito por el chofer! El móvil ya se encuentra en viaje hacia tu ubicación.');
+        } else if (data.estado === 'rechazado') {
+          setComprobanteAprobado(false);
+          setComprobanteEnviado(false);
+          setComprobanteBase64(null);
+          setComprobanteUri(null);
+          Alert.alert('❌ Comprobante No Válido', 'El chofer no pudo validar el comprobante enviado. Por favor verifica que la captura sea legible y el importe correcto, y vuelve a adjuntarlo.');
         }
       }
     });
@@ -583,6 +718,7 @@ export default function MapScreen({ route, navigation }) {
       socket.off('ride_started');
       socket.off('ride_finished');
       socket.off('toggle_espera');
+      socket.off('comprobante_validado');
       socket.off('ride_driver_timeout');
       socket.off('ride_driver_rejected');
     };
@@ -921,35 +1057,296 @@ export default function MapScreen({ route, navigation }) {
         )}
 
         {estadoViaje && (
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: estadoViaje.includes('finalizado') ? '#3b82f6' : '#10b981'}]} 
-            onPress={() => {
-              if (estadoViaje.includes('finalizado')) {
-                if (choferAsignado) {
-                  setTripToRate({
-                    viaje_id: viajeId,
-                    chofer: choferAsignado,
-                    origen: origenTexto,
-                    destino: destinoTexto
-                  });
-                  setEstrellas(5);
-                  setComentarioCalificacion('');
-                  setEtiquetasSeleccionadas([]);
-                  setModalCalificacion(true);
+          <View style={{ width: '100%', gap: 12 }}>
+            {/* Si es transferencia: Tarjeta ejecutiva de comprobante y Alias */}
+            {metodoPagoSeleccionado === 'transferencia' && choferAsignado && !estadoViaje.includes('finalizado') && (
+              <View style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderRadius: 18,
+                borderWidth: 1.5,
+                borderColor: comprobanteAprobado ? '#10b981' : (comprobanteEnviado ? '#eab308' : 'rgba(56, 189, 248, 0.4)'),
+                padding: 14,
+                gap: 10
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ color: '#38bdf8', fontWeight: '800', fontSize: 13, letterSpacing: 0.3 }}>
+                    💳 PAGO POR TRANSFERENCIA
+                  </Text>
+                  <View style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 10,
+                    backgroundColor: comprobanteAprobado ? 'rgba(16, 185, 129, 0.2)' : (comprobanteEnviado ? 'rgba(234, 179, 8, 0.2)' : 'rgba(56, 189, 248, 0.15)')
+                  }}>
+                    <Text style={{
+                      color: comprobanteAprobado ? '#10b981' : (comprobanteEnviado ? '#facc15' : '#38bdf8'),
+                      fontWeight: '800',
+                      fontSize: 11
+                    }}>
+                      {comprobanteAprobado ? '✓ Verificado' : (comprobanteEnviado ? '⏳ Enviado' : 'Pendiente')}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Alias Box */}
+                <View style={{
+                  backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                  borderRadius: 12,
+                  padding: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.08)'
+                }}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '600' }}>Alias del Chofer (Móvil #{choferAsignado.numero_movil}):</Text>
+                    <Text style={{ color: '#f8fafc', fontSize: 14, fontWeight: '800', marginTop: 2 }} selectable={true}>
+                      {choferAsignado.datos_pago || 'alberdi.central.mp'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: 'rgba(56, 189, 248, 0.4)'
+                    }}
+                    onPress={() => copiarAlias(choferAsignado.datos_pago || 'alberdi.central.mp')}
+                  >
+                    <Text style={{ color: '#38bdf8', fontWeight: '800', fontSize: 12 }}>📋 Copiar</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Estado del comprobante */}
+                {comprobanteAprobado ? (
+                  <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#10b981' }}>
+                    <Text style={{ color: '#34d399', fontWeight: '800', textAlign: 'center', fontSize: 13 }}>
+                      ✅ ¡Comprobante Verificado!
+                    </Text>
+                    <Text style={{ color: '#cbd5e1', fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+                      El chofer ya inició el viaje hacia tu ubicación.
+                    </Text>
+                  </View>
+                ) : comprobanteEnviado ? (
+                  <View style={{ backgroundColor: 'rgba(234, 179, 8, 0.15)', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#eab308' }}>
+                    <Text style={{ color: '#facc15', fontWeight: '800', textAlign: 'center', fontSize: 13 }}>
+                      ⏳ Comprobante Enviado
+                    </Text>
+                    <Text style={{ color: '#cbd5e1', fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+                      Esperando que el chofer lo verifique en su pantalla para salir.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {comprobanteUri ? (
+                      <View style={{ alignItems: 'center', gap: 8 }}>
+                        <Image source={{ uri: comprobanteUri }} style={{ width: '100%', height: 110, borderRadius: 10, resizeMode: 'cover' }} />
+                        <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                          <TouchableOpacity
+                            style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+                            onPress={() => { setComprobanteUri(null); setComprobanteBase64(null); }}
+                          >
+                            <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 12 }}>✕ Quitar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ flex: 2, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+                            onPress={enviarComprobante}
+                            disabled={subiendoComprobante}
+                          >
+                            {subiendoComprobante ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>📤 Enviar al Chofer</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: 'rgba(16, 185, 129, 0.18)',
+                          borderWidth: 1.5,
+                          borderColor: '#10b981',
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8
+                        }}
+                        onPress={seleccionarComprobante}
+                      >
+                        <Text style={{ fontSize: 16 }}>📎</Text>
+                        <Text style={{ color: '#34d399', fontWeight: '800', fontSize: 13 }}>
+                          Adjuntar Foto del Comprobante
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Si es efectivo: Recordatorio claro */}
+            {metodoPagoSeleccionado === 'efectivo' && !estadoViaje.includes('finalizado') && (
+              <View style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                borderWidth: 1,
+                borderColor: 'rgba(56, 189, 248, 0.3)',
+                padding: 10,
+                borderRadius: 12
+              }}>
+                <Text style={{ color: '#38bdf8', fontWeight: '700', fontSize: 12, textAlign: 'center' }}>
+                  💵 Método: Efectivo al llegar. Ten listo el dinero para abonar al chofer.
+                </Text>
+              </View>
+            )}
+
+            {/* Botón de estado */}
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: estadoViaje.includes('finalizado') ? '#3b82f6' : '#10b981'}]} 
+              onPress={() => {
+                if (estadoViaje.includes('finalizado')) {
+                  if (choferAsignado) {
+                    setTripToRate({
+                      viaje_id: viajeId,
+                      chofer: choferAsignado,
+                      origen: origenTexto,
+                      destino: destinoTexto
+                    });
+                    setEstrellas(5);
+                    setComentarioCalificacion('');
+                    setEtiquetasSeleccionadas([]);
+                    setModalCalificacion(true);
+                  }
+                  setEstadoViaje(null);
+                  setChoferAsignado(null);
+                  setOrigenTexto('');
+                  setDestinoTexto('');
+                  setComprobanteBase64(null);
+                  setComprobanteUri(null);
+                  setComprobanteEnviado(false);
+                  setComprobanteAprobado(false);
                 }
-                setEstadoViaje(null);
-                setChoferAsignado(null);
-                setOrigenTexto('');
-                setDestinoTexto('');
-              }
-            }}
-          >
-            <Text style={styles.buttonText}>
-              {estadoViaje.includes('finalizado') ? 'Pedir otro viaje' : 'Taxi Solicitado ✓'}
-            </Text>
-          </TouchableOpacity>
+              }}
+            >
+              <Text style={styles.buttonText}>
+                {estadoViaje.includes('finalizado') ? 'Pedir otro viaje' : 'Taxi Solicitado ✓'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
+
+      {/* Modal Selector de Método de Pago Fuera de Casilda */}
+      <Modal visible={modalMetodoPagoFueraCasilda} animationType="slide" transparent={true}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', maxWidth: 440, backgroundColor: theme.cardBg, borderRadius: 24, padding: 22, borderWidth: 1.5, borderColor: '#10b981' }}>
+            
+            <View style={{ alignItems: 'center', marginBottom: 14 }}>
+              <Text style={{ fontSize: 26, marginBottom: 4 }}>📍</Text>
+              <Text style={{ fontSize: 19, fontWeight: '900', color: theme.text, textAlign: 'center', letterSpacing: -0.3 }}>
+                Viaje Fuera de Casilda
+              </Text>
+              <Text style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
+                Detectamos origen en {origenTexto.toLowerCase().includes('sanford') ? 'Sanford' : 'otra localidad'}. Selecciona cómo deseas abonar tu viaje:
+              </Text>
+            </View>
+
+            {/* Opción 1: Transferencia Anticipada */}
+            <TouchableOpacity 
+              style={{
+                backgroundColor: metodoPagoSeleccionado === 'transferencia' ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.03)',
+                borderColor: metodoPagoSeleccionado === 'transferencia' ? '#10b981' : 'rgba(255, 255, 255, 0.1)',
+                borderWidth: 1.5,
+                borderRadius: 16,
+                padding: 14,
+                marginBottom: 12
+              }}
+              onPress={() => setMetodoPagoSeleccionado('transferencia')}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 18 }}>💳</Text>
+                  <Text style={{ color: '#f8fafc', fontWeight: '800', fontSize: 14 }}>Transferencia Anticipada</Text>
+                </View>
+                <View style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: metodoPagoSeleccionado === 'transferencia' ? '#10b981' : '#64748b',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {metodoPagoSeleccionado === 'transferencia' && (
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10b981' }} />
+                  )}
+                </View>
+              </View>
+              <Text style={{ color: '#94a3b8', fontSize: 12, lineHeight: 16, marginLeft: 26 }}>
+                Transfieres al Alias del chofer asignado y adjuntas la foto del comprobante directamente aquí en la app.
+              </Text>
+            </TouchableOpacity>
+
+            {/* Opción 2: Efectivo al llegar */}
+            <TouchableOpacity 
+              style={{
+                backgroundColor: metodoPagoSeleccionado === 'efectivo' ? 'rgba(56, 189, 248, 0.16)' : 'rgba(255, 255, 255, 0.03)',
+                borderColor: metodoPagoSeleccionado === 'efectivo' ? '#38bdf8' : 'rgba(255, 255, 255, 0.1)',
+                borderWidth: 1.5,
+                borderRadius: 16,
+                padding: 14,
+                marginBottom: 16
+              }}
+              onPress={() => setMetodoPagoSeleccionado('efectivo')}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 18 }}>💵</Text>
+                  <Text style={{ color: '#f8fafc', fontWeight: '800', fontSize: 14 }}>Efectivo al Chofer</Text>
+                </View>
+                <View style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: metodoPagoSeleccionado === 'efectivo' ? '#38bdf8' : '#64748b',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {metodoPagoSeleccionado === 'efectivo' && (
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#38bdf8' }} />
+                  )}
+                </View>
+              </View>
+              <Text style={{ color: '#94a3b8', fontSize: 12, lineHeight: 16, marginLeft: 26 }}>
+                Abonas en mano al llegar a destino. Confirmas que te encuentras en el lugar esperando al móvil.
+              </Text>
+            </TouchableOpacity>
+
+            {/* Botones de Acción */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity 
+                style={{ flex: 1, paddingVertical: 13, borderRadius: 14, backgroundColor: 'rgba(255, 255, 255, 0.08)', alignItems: 'center' }}
+                onPress={() => setModalMetodoPagoFueraCasilda(false)}
+              >
+                <Text style={{ color: '#94a3b8', fontWeight: '700', fontSize: 14 }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={{ flex: 2, paddingVertical: 13, borderRadius: 14, backgroundColor: '#10b981', alignItems: 'center' }}
+                onPress={() => confirmarMetodoPagoFueraCasilda(metodoPagoSeleccionado)}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Continuar Pedido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal de Selección de Chofer o Más Rápido */}
       <Modal visible={modalSeleccionChofer} animationType="slide" transparent={true}>

@@ -21,6 +21,12 @@ export default function MainScreen({ route, navigation }) {
   const [enEspera, setEnEspera] = useState(false);
   const [minutosEspera, setMinutosEspera] = useState(0);
   const [esperaIntervalId, setEsperaIntervalId] = useState(null);
+
+  // Estados para comprobante de pago anticipado
+  const [comprobanteRecibido, setComprobanteRecibido] = useState(null);
+  const [comprobanteAprobado, setComprobanteAprobado] = useState(false);
+  const [validandoComprobante, setValidandoComprobante] = useState(false);
+  const [modalVerComprobante, setModalVerComprobante] = useState(false);
   
   // En React Native (sin web) simularemos un chofer si no viene por params
   const chofer = route?.params?.chofer || { id: 'sim-native', dni: 'sim' };
@@ -96,9 +102,20 @@ export default function MainScreen({ route, navigation }) {
       }
     });
 
+    newSocket.on('comprobante_recibido', (data) => {
+      setComprobanteRecibido(data.comprobante_url);
+      setComprobanteAprobado(false);
+      Vibration.vibrate([0, 300, 150, 300]);
+      Alert.alert(
+        '📄 Comprobante Recibido',
+        'El pasajero ha adjuntado el comprobante de transferencia. Por favor revísalo en tu pantalla y valídalo.'
+      );
+    });
+
     return () => {
       newSocket.off('new_ride_request');
       newSocket.off('driver_status_changed');
+      newSocket.off('comprobante_recibido');
       newSocket.disconnect();
     };
   }, [viajeTelefonicoActivo, chofer]);
@@ -326,6 +343,40 @@ export default function MainScreen({ route, navigation }) {
     }
   }, [isOnline, incomingRide]);
 
+  const responderComprobante = async (estado) => {
+    if (!activeTrip) return;
+    setValidandoComprobante(true);
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/viajes/validar-comprobante`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: activeTrip.id,
+          chofer_id: chofer.id,
+          estado
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (estado === 'aprobado') {
+          setComprobanteAprobado(true);
+          Alert.alert('✅ Comprobante Aprobado', 'Se notificó al pasajero. Ya puedes salir a buscarlo.');
+        } else {
+          setComprobanteAprobado(false);
+          setComprobanteRecibido(null);
+          Alert.alert('❌ Comprobante Rechazado', 'Se notificó al pasajero para que adjunte un comprobante válido.');
+        }
+      } else {
+        Alert.alert('Error', data.error || 'No se pudo validar el comprobante');
+      }
+    } catch (e) {
+      console.error('Error al responder comprobante:', e);
+      Alert.alert('Error', 'Error de conexión');
+    } finally {
+      setValidandoComprobante(false);
+    }
+  };
+
   const aceptarViaje = async () => {
     if (!chofer.id || !incomingRide) return;
 
@@ -341,7 +392,14 @@ export default function MainScreen({ route, navigation }) {
       const data = await response.json();
       if (data.success) {
         Alert.alert('Éxito', '¡Viaje Aceptado! Dirígete al punto de partida.');
-        setActiveTrip(data.viaje);
+        setActiveTrip({
+          ...data.viaje,
+          metodo_pago: incomingRide.metodo_pago || data.viaje.metodo_pago,
+          es_fuera_de_casilda: incomingRide.es_fuera_de_casilda || data.viaje.es_fuera_de_casilda,
+          origen_direccion: incomingRide.origen_direccion || data.viaje.origen_direccion
+        });
+        setComprobanteRecibido(incomingRide.comprobante_url || null);
+        setComprobanteAprobado(false);
         setConfirmadoJubilado(false); // Resetear confirmación
         setIsOnline(false); // Pasa a ocupado
       } else {
@@ -576,9 +634,45 @@ export default function MainScreen({ route, navigation }) {
             {incomingRide.pasajero_nombre && (
               <Text style={[styles.notificationText, { color: theme.text, fontWeight: 'bold' }]}>Pasajero: {incomingRide.pasajero_nombre}</Text>
             )}
+            {incomingRide.origen_direccion ? (
+              <Text style={[styles.notificationText, { color: '#38bdf8', fontWeight: 'bold' }]}>
+                📍 Origen: {incomingRide.origen_direccion}
+              </Text>
+            ) : null}
             <Text style={[styles.notificationText, { color: theme.text }]}>
-              Se requiere un móvil en las coordenadas: {incomingRide.origen_lat}, {incomingRide.origen_lng}
+              Coordenadas: {incomingRide.origen_lat}, {incomingRide.origen_lng}
             </Text>
+
+            {/* Aviso especial para Viaje Fuera de Casilda / Pago */}
+            {incomingRide.es_fuera_de_casilda && (
+              <View style={{
+                backgroundColor: incomingRide.metodo_pago === 'transferencia' ? 'rgba(16, 185, 129, 0.18)' : 'rgba(234, 179, 8, 0.18)',
+                borderWidth: 1.5,
+                borderColor: incomingRide.metodo_pago === 'transferencia' ? '#10b981' : '#eab308',
+                padding: 10,
+                borderRadius: 12,
+                marginVertical: 8,
+                width: '100%',
+                alignItems: 'center'
+              }}>
+                <Text style={{
+                  color: incomingRide.metodo_pago === 'transferencia' ? '#34d399' : '#facc15',
+                  fontWeight: '800',
+                  fontSize: 13,
+                  textAlign: 'center'
+                }}>
+                  {incomingRide.metodo_pago === 'transferencia'
+                    ? '💳 VIAJE INTERURBANO: PAGO POR TRANSFERENCIA'
+                    : '💵 VIAJE INTERURBANO: PAGO EN EFECTIVO'}
+                </Text>
+                <Text style={{ color: '#e2e8f0', fontSize: 11, textAlign: 'center', marginTop: 3 }}>
+                  {incomingRide.metodo_pago === 'transferencia'
+                    ? 'El pasajero adjuntará el comprobante en su app para que lo verifiques antes de salir.'
+                    : 'El pasajero confirmó su espera en el lugar y abonará en mano.'}
+                </Text>
+              </View>
+            )}
+
             {incomingRide.es_jubilado && (
               <View style={{ backgroundColor: '#10b981', padding: 8, borderRadius: 8, marginVertical: 10, alignItems: 'center' }}>
                 <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>¡ATENCIÓN: PASAJERO JUBILADO!</Text>
@@ -719,6 +813,109 @@ export default function MainScreen({ route, navigation }) {
           </View>
         ) : activeTrip && activeTrip.estado !== 'en_viaje' ? (
           <>
+            {/* Control de Comprobante / Pago Anticipado */}
+            {activeTrip.metodo_pago === 'transferencia' && (
+              <View style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderWidth: 1.5,
+                borderColor: comprobanteAprobado ? '#10b981' : (comprobanteRecibido ? '#eab308' : 'rgba(56, 189, 248, 0.4)'),
+                padding: 14,
+                borderRadius: 16,
+                marginBottom: 12,
+                gap: 10
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ color: '#38bdf8', fontWeight: '800', fontSize: 13 }}>
+                    💳 COMPROBANTE DE TRANSFERENCIA
+                  </Text>
+                  <View style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 10,
+                    backgroundColor: comprobanteAprobado ? 'rgba(16, 185, 129, 0.2)' : (comprobanteRecibido ? 'rgba(234, 179, 8, 0.2)' : 'rgba(56, 189, 248, 0.15)')
+                  }}>
+                    <Text style={{
+                      color: comprobanteAprobado ? '#10b981' : (comprobanteRecibido ? '#facc15' : '#38bdf8'),
+                      fontWeight: '800',
+                      fontSize: 11
+                    }}>
+                      {comprobanteAprobado ? '✓ Aprobado' : (comprobanteRecibido ? '📄 Recibido' : 'Esperando')}
+                    </Text>
+                  </View>
+                </View>
+
+                {comprobanteRecibido ? (
+                  <View style={{ alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity 
+                      style={{ width: '100%', alignItems: 'center' }}
+                      onPress={() => setModalVerComprobante(true)}
+                    >
+                      <Image 
+                        source={{ uri: comprobanteRecibido }} 
+                        style={{ width: '100%', height: 110, borderRadius: 10, resizeMode: 'cover' }} 
+                      />
+                      <Text style={{ color: '#38bdf8', fontSize: 12, fontWeight: '700', marginTop: 4 }}>
+                        🔍 Toca para ampliar comprobante
+                      </Text>
+                    </TouchableOpacity>
+
+                    {comprobanteAprobado ? (
+                      <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', padding: 10, borderRadius: 10, width: '100%' }}>
+                        <Text style={{ color: '#34d399', fontWeight: '800', textAlign: 'center', fontSize: 13 }}>
+                          ✓ Pago Verificado con Éxito
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.2)', borderWidth: 1, borderColor: '#ef4444', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+                          onPress={() => responderComprobante('rechazado')}
+                          disabled={validandoComprobante}
+                        >
+                          <Text style={{ color: '#f87171', fontWeight: '800', fontSize: 13 }}>✕ Rechazar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 2, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+                          onPress={() => responderComprobante('aprobado')}
+                          disabled={validandoComprobante}
+                        >
+                          {validandoComprobante ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>✅ Validar y Salir</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <View style={{ backgroundColor: 'rgba(234, 179, 8, 0.12)', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(234, 179, 8, 0.3)' }}>
+                    <Text style={{ color: '#facc15', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+                      ⏳ El pasajero está realizando la transferencia y adjuntará la captura en la app...
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {activeTrip.metodo_pago === 'efectivo' && activeTrip.es_fuera_de_casilda && (
+              <View style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                borderWidth: 1,
+                borderColor: 'rgba(56, 189, 248, 0.35)',
+                padding: 10,
+                borderRadius: 12,
+                marginBottom: 10
+              }}>
+                <Text style={{ color: '#38bdf8', fontWeight: '800', fontSize: 12, textAlign: 'center' }}>
+                  💵 PAGO EN EFECTIVO (FUERA DE CASILDA)
+                </Text>
+                <Text style={{ color: '#cbd5e1', fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+                  El pasajero confirmó su espera en el lugar y abonará en mano.
+                </Text>
+              </View>
+            )}
+
             {activeTrip.es_jubilado && (
               <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: 14, borderRadius: 14, marginBottom: 12, borderColor: '#10b981', borderWidth: 1.5 }}>
                 <Text style={{ color: '#10b981', fontWeight: 'bold', textAlign: 'center', marginBottom: 8, fontSize: 14 }}>
@@ -793,6 +990,37 @@ export default function MainScreen({ route, navigation }) {
           </View>
         )}
       </View>
+
+      {/* Modal para ver Comprobante en Grande */}
+      <Modal visible={modalVerComprobante} transparent={true} animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', maxWidth: 460, backgroundColor: '#0f172a', borderRadius: 20, padding: 18, alignItems: 'center', borderWidth: 1.5, borderColor: '#10b981' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+              <Text style={{ color: '#f8fafc', fontWeight: '800', fontSize: 16 }}>📄 Comprobante de Transferencia</Text>
+              <TouchableOpacity 
+                style={{ padding: 6, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                onPress={() => setModalVerComprobante(false)}
+              >
+                <Text style={{ color: '#94a3b8', fontSize: 16, fontWeight: 'bold', paddingHorizontal: 6 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {comprobanteRecibido && (
+              <Image 
+                source={{ uri: comprobanteRecibido }} 
+                style={{ width: '100%', height: 380, borderRadius: 12, resizeMode: 'contain' }} 
+              />
+            )}
+
+            <TouchableOpacity 
+              style={{ marginTop: 16, backgroundColor: '#10b981', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, width: '100%', alignItems: 'center' }}
+              onPress={() => setModalVerComprobante(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Cerrar Vista</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
