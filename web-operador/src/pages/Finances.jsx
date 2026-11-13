@@ -34,8 +34,8 @@ export default function Finances() {
   const totalCommission = completedTrips.reduce((acc, trip) => acc + Number(trip.comision_admin || 0), 0);
   
   // Asumimos efectivo por defecto si no hay método
-  const totalCash = completedTrips.filter(t => t.metodo_pago !== 'mercadopago').reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
-  const totalMP = completedTrips.filter(t => t.metodo_pago === 'mercadopago').reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
+  const totalCash = completedTrips.filter(t => t.metodo_pago !== 'mercadopago' && t.metodo_pago !== 'transferencia').reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
+  const totalDigital = completedTrips.filter(t => t.metodo_pago === 'mercadopago' || t.metodo_pago === 'transferencia').reduce((acc, trip) => acc + Number(trip.monto_calculado || 0), 0);
 
   return (
     <div className="page-container">
@@ -72,9 +72,9 @@ export default function Finances() {
         <div className="kpi-card digital">
           <div className="kpi-icon"><CreditCard size={24} /></div>
           <div className="kpi-data">
-            <h3>Mercado Pago</h3>
-            <h2>${totalMP.toLocaleString()}</h2>
-            <p>Transferencias directas</p>
+            <h3>Transferencias / Digital</h3>
+            <h2>${totalDigital.toLocaleString()}</h2>
+            <p>Transferencias directas y MP</p>
           </div>
         </div>
       </div>
@@ -96,27 +96,35 @@ export default function Finances() {
             </tr>
           </thead>
           <tbody>
-            {trips.map(trip => (
-              <tr key={trip.id} className={trip.estado === 'cancelado' ? 'row-cancelled' : ''}>
-                <td>{trip.id.substring(0,6)}...</td>
-                <td>{new Date(trip.fecha).toLocaleString()}</td>
-                <td>{trip.numero_movil ? `Móvil #${trip.numero_movil} - ${trip.chofer_nombre} ${trip.chofer_apellido}` : 'Sin asignar'}</td>
-                <td>{trip.pasajero_nombre} {trip.pasajero_apellido}</td>
-                <td>
-                  <span className={`pay-badge ${trip.metodo_pago === 'mercadopago' ? 'pay-mp' : 'pay-cash'}`}>
-                    {trip.metodo_pago || 'efectivo'}
-                  </span>
-                </td>
-                <td>
-                  <span className={`status-badge ${trip.estado === 'finalizado' ? 'status-ok' : (trip.estado === 'cancelado' ? 'status-bad' : 'status-pending')}`}>
-                    {trip.estado.toUpperCase()}
-                  </span>
-                </td>
-                <td className="text-right">
-                  <strong>${Number(trip.monto_calculado || 0).toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>
+            {trips.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+                  No hay registros de viajes para mostrar
                 </td>
               </tr>
-            ))}
+            ) : (
+              trips.map(trip => (
+                <tr key={trip.id} className={trip.estado === 'cancelado' ? 'row-cancelled' : ''}>
+                  <td>#{String(trip.id)}</td>
+                  <td>{trip.fecha ? new Date(trip.fecha).toLocaleString() : 'N/A'}</td>
+                  <td>{trip.numero_movil ? `Móvil #${trip.numero_movil} - ${trip.chofer_nombre || ''} ${trip.chofer_apellido || ''}`.trim() : 'Sin asignar'}</td>
+                  <td>{trip.pasajero_nombre || 'Pasajero'} {trip.pasajero_apellido || ''}</td>
+                  <td>
+                    <span className={`pay-badge ${(trip.metodo_pago === 'mercadopago' || trip.metodo_pago === 'transferencia') ? 'pay-mp' : 'pay-cash'}`}>
+                      {trip.metodo_pago === 'transferencia' ? 'transferencia' : (trip.metodo_pago || 'efectivo')}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status-badge ${trip.estado === 'finalizado' ? 'status-ok' : (trip.estado === 'cancelado' ? 'status-bad' : 'status-pending')}`}>
+                      {String(trip.estado || 'solicitado').toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    <strong>${Number(trip.monto_calculado || 0).toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
