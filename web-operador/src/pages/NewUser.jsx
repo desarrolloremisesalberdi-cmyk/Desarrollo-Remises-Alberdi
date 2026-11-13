@@ -17,7 +17,6 @@ export default function NewUser() {
     vehiculo_modelo: '',
     vehiculo_color: '',
     vehiculo_patente: '',
-    vehiculo_puertas: '4', // Por defecto 4 según requerimientos
     datos_cobro: '',
     foto_perfil_base64: '',
     foto_carnet_base64: '',
@@ -168,13 +167,6 @@ export default function NewUser() {
               <div className="form-group">
                 <label>Patente</label>
                 <input type="text" name="vehiculo_patente" value={formData.vehiculo_patente} onChange={handleChange} required />
-              </div>
-              <div className="form-group">
-                <label>Cantidad de Puertas (Obligatorio 4)</label>
-                <select name="vehiculo_puertas" value={formData.vehiculo_puertas} onChange={handleChange}>
-                  <option value="4">4 Puertas</option>
-                  <option value="2" disabled>2 Puertas (No permitido)</option>
-                </select>
               </div>
               <div className="form-group file-upload">
                 <label>Foto del Auto</label>
