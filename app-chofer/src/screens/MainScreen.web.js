@@ -6,12 +6,14 @@ const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
 export default function MainScreen({ route, navigation }) {
-  const [isOnline, setIsOnline] = useState(false); 
+  // Estado automático: el chofer inicia siempre como LIBRE (isOnline = true) y pasa a OCUPADO solo con un viaje activo
+  const [isOnline, setIsOnline] = useState(true); 
   const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
   const [location, setLocation] = useState(null);
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
+  const [recaudacionHoy, setRecaudacionHoy] = useState(0);
   const [enEspera, setEnEspera] = useState(false);
   const [minutosEspera, setMinutosEspera] = useState(0);
   const [esperaIntervalId, setEsperaIntervalId] = useState(null);
@@ -25,23 +27,46 @@ export default function MainScreen({ route, navigation }) {
   const locationRef = useRef(location);
   const isOnlineRef = useRef(isOnline);
   const activeTripRef = useRef(activeTrip);
+  const viajeTelefonicoRef = useRef(viajeTelefonicoActivo);
 
   useEffect(() => { locationRef.current = location; }, [location]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { activeTripRef.current = activeTrip; }, [activeTrip]);
+  useEffect(() => { viajeTelefonicoRef.current = viajeTelefonicoActivo; }, [viajeTelefonicoActivo]);
+
+  const cargarRecaudacionHoy = async () => {
+    if (!chofer?.id) return;
+    try {
+      const res = await fetch(`${API_URL}/api/finanzas/chofer/${chofer.id}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.viajes)) {
+        const hoyStr = new Date().toDateString();
+        const totalHoy = data.viajes
+          .filter((v) => v.fecha && new Date(v.fecha).toDateString() === hoyStr)
+          .reduce((acc, v) => acc + (parseFloat(v.monto_calculado) || 0), 0);
+        setRecaudacionHoy(Math.round(totalHoy));
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    cargarRecaudacionHoy();
+  }, [chofer?.id]);
 
   useEffect(() => {
     // Al reconectar socket (por pérdida temporal de señal o suspensión)
     socket.on('connect', () => {
       console.log('Socket chofer conectado en Web');
-      if (chofer && (isOnlineRef.current || activeTripRef.current)) {
+      if (chofer) {
+        const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         socket.emit('update_location', {
           chofer_id: chofer.id || 'sim-1',
           dni: chofer.dni || '31861718',
           movil: chofer.numero_movil || '14',
           lat: locationRef.current ? locationRef.current.latitude : -33.045,
           lng: locationRef.current ? locationRef.current.longitude : -61.168,
-          isOnline: isOnlineRef.current,
+          isOnline: !ocupado,
+          estado: ocupado ? 'ocupado' : 'libre',
           foto_url: chofer.foto_url || null
         });
       }
@@ -49,10 +74,10 @@ export default function MainScreen({ route, navigation }) {
 
     // Escuchar solicitudes de viaje nuevas
     socket.on('new_ride_request', (viaje) => {
-      if (viajeTelefonicoActivo) {
-        return; // Chofer ocupado con viaje de base telefónica
+      if (viajeTelefonicoRef.current || activeTripRef.current) {
+        return; // Chofer ocupado en otro viaje
       }
-      if (viaje.chofer_destinado_id && viaje.chofer_destinado_id !== chofer.id) {
+      if (viaje.chofer_destinado_id && String(viaje.chofer_destinado_id) !== String(chofer.id)) {
         return; // Asignado a otro chofer
       }
       setIncomingRide(viaje);
@@ -74,7 +99,7 @@ export default function MainScreen({ route, navigation }) {
               const audio = new window.Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
               audio.play();
             } catch (e) {}
-            alert('📞 La Base te ha asignado un VIAJE TELEFÓNICO.\n\nTu estado ahora es OCUPADO.\nEste viaje NO rinde comisión a la app (0% Comisión).\nAl completar el viaje, presiona "Finalizar Viaje y Ponerme Libre".');
+            alert('📞 La Base te ha asignado un VIAJE TELEFÓNICO.\n\nTu estado cambió automáticamente a OCUPADO.\nEste viaje NO rinde comisión a la app (0% Comisión).\nAl completar el viaje, presiona "Finalizar Viaje" para volver a LIBRE automáticamente.');
           }
         } else if (data.estado === 'libre') {
           setViajeTelefonicoActivo(false);
@@ -86,25 +111,44 @@ export default function MainScreen({ route, navigation }) {
       }
     });
 
+    socket.on('ride_cancelled', (data) => {
+      const isCurrentTrip = activeTripRef.current && String(activeTripRef.current.id) === String(data.viaje_id);
+      const isAssignedDriver = data.chofer_id && String(data.chofer_id) === String(chofer.id);
+      if (isCurrentTrip || isAssignedDriver) {
+        setActiveTrip(null);
+        setIncomingRide(null);
+        setConfirmadoJubilado(false);
+        setEnEspera(false);
+        setMinutosEspera(0);
+        setIsOnline(true); // Vuelve automáticamente a LIBRE
+        if (data.cancelado_por !== 'chofer') {
+          alert('⚠️ El viaje fue cancelado. Tu estado volvió automáticamente a LIBRE.');
+        }
+      }
+    });
+
     return () => {
       socket.off('new_ride_request');
       socket.off('driver_status_changed');
+      socket.off('ride_cancelled');
     };
-  }, [viajeTelefonicoActivo, chofer]);
+  }, [chofer]);
 
   // Monitoreo de pestaña/pantalla activa en Web (desbloqueo o cambio de pestaña)
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         if (!socket.connected) socket.connect();
-        if (chofer && (isOnlineRef.current || activeTripRef.current)) {
+        if (chofer) {
+          const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
           socket.emit('update_location', {
             chofer_id: chofer.id || 'sim-1',
             dni: chofer.dni || '31861718',
             movil: chofer.numero_movil || '14',
             lat: locationRef.current ? locationRef.current.latitude : -33.045,
             lng: locationRef.current ? locationRef.current.longitude : -61.168,
-            isOnline: isOnlineRef.current,
+            isOnline: !ocupado,
+            estado: ocupado ? 'ocupado' : 'libre',
             foto_url: chofer.foto_url || null
           });
         }
@@ -116,27 +160,30 @@ export default function MainScreen({ route, navigation }) {
 
   // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket y evitar desconexión
   useEffect(() => {
-    if (!isOnline && !activeTrip) return;
+    if (!isOnline && !activeTrip && !viajeTelefonicoActivo) return;
     const heartbeat = setInterval(() => {
       if (chofer) {
+        const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         socket.emit('update_location', {
           chofer_id: chofer.id || 'sim-1',
           dni: chofer.dni || '31861718',
           movil: chofer.numero_movil || '14',
           lat: locationRef.current ? locationRef.current.latitude : -33.045,
           lng: locationRef.current ? locationRef.current.longitude : -61.168,
-          isOnline: isOnlineRef.current,
+          isOnline: !ocupado,
+          estado: ocupado ? 'ocupado' : 'libre',
           foto_url: chofer.foto_url || null
         });
       }
     }, 12000);
     return () => clearInterval(heartbeat);
-  }, [chofer, isOnline, activeTrip]);
+  }, [chofer, isOnline, activeTrip, viajeTelefonicoActivo]);
 
   useEffect(() => {
     let watchId = null;
 
-    if (isOnline || activeTrip) {
+    if (isOnline || activeTrip || viajeTelefonicoActivo) {
+      const ocupadoActual = Boolean(activeTrip || viajeTelefonicoActivo);
       // Send immediate update so operator sees the change instantly without waiting for GPS
       socket.emit('update_location', {
         chofer_id: chofer.id || 'sim-1',
@@ -144,7 +191,8 @@ export default function MainScreen({ route, navigation }) {
         movil: chofer.numero_movil || '14',
         lat: location ? location.latitude : -33.045,
         lng: location ? location.longitude : -61.168,
-        isOnline: true,
+        isOnline: !ocupadoActual,
+        estado: ocupadoActual ? 'ocupado' : 'libre',
         foto_url: chofer.foto_url || null
       });
 
@@ -153,14 +201,15 @@ export default function MainScreen({ route, navigation }) {
           (position) => {
             const { latitude, longitude } = position.coords;
             setLocation({ latitude, longitude });
-            
+            const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
             socket.emit('update_location', {
               chofer_id: chofer.id || 'sim-1',
               dni: chofer.dni || '31861718',
               movil: chofer.numero_movil || '14',
               lat: latitude,
               lng: longitude,
-              isOnline: isOnline,
+              isOnline: !ocupado,
+              estado: ocupado ? 'ocupado' : 'libre',
               foto_url: chofer.foto_url || null
             });
           },
@@ -168,15 +217,12 @@ export default function MainScreen({ route, navigation }) {
             console.warn('Error obteniendo ubicación', error);
             if (error.code === error.PERMISSION_DENIED) {
               alert('Permiso de GPS denegado. Actívalo en tu navegador para trabajar.');
-              setIsOnline(false);
             }
-            // Si es un error de timeout o accuracy, no apagamos el isOnline, intentará de nuevo.
           },
           { enableHighAccuracy: false, maximumAge: 5000, timeout: 15000 }
         );
       } else {
         alert("Tu navegador no soporta GPS.");
-        setIsOnline(false);
       }
     } else {
       socket.emit('update_location', {
@@ -185,7 +231,8 @@ export default function MainScreen({ route, navigation }) {
         movil: chofer.numero_movil || '14',
         lat: location ? location.latitude : -33.045,
         lng: location ? location.longitude : -61.168,
-        isOnline: false
+        isOnline: false,
+        estado: 'inactivo'
       });
       if (watchId !== null && 'geolocation' in navigator) {
         navigator.geolocation.clearWatch(watchId);
@@ -197,7 +244,7 @@ export default function MainScreen({ route, navigation }) {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [isOnline, activeTrip, chofer]);
+  }, [isOnline, activeTrip, viajeTelefonicoActivo, chofer]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -375,32 +422,60 @@ export default function MainScreen({ route, navigation }) {
     }
   };
 
-  const handleToggleStatus = async () => {
-    if (!isOnline && activeTrip && activeTrip.estado === 'en_viaje') {
-      // El chofer estaba ocupado y pasa a libre -> Finaliza el viaje
-      try {
-        if (esperaIntervalId) clearInterval(esperaIntervalId);
-        const response = await fetch(`${API_URL}/api/viajes/finish`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            viaje_id: activeTrip.id,
-            chofer_id: chofer.id || chofer.dni,
-            fin_lat: location ? location.latitude : -33.046,
-            fin_lng: location ? location.longitude : -61.169,
-            espera_minutos: minutosEspera
-          })
-        });
-        const data = await response.json();
-        if (data.success) {
-          alert(`Viaje Finalizado.\nDistancia: ${data.viaje.distancia_km.toFixed(2)} km\nMonto a Cobrar: $${data.viaje.monto_calculado}\nComisión Base: $${data.viaje.comision_admin}`);
-        }
-      } catch (err) {
-        console.error('Error al finalizar viaje:', err);
+  const handleFinishTrip = async () => {
+    if (!activeTrip) return;
+    try {
+      if (esperaIntervalId) clearInterval(esperaIntervalId);
+      const response = await fetch(`${API_URL}/api/viajes/finish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: activeTrip.id,
+          chofer_id: chofer.id || chofer.dni,
+          fin_lat: location ? location.latitude : -33.046,
+          fin_lng: location ? location.longitude : -61.169,
+          espera_minutos: minutosEspera
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`✅ Viaje Finalizado.\nDistancia: ${data.viaje.distancia_km.toFixed(2)} km\nMonto a Cobrar: $${data.viaje.monto_calculado}\nComisión Base: $${data.viaje.comision_admin}\n\nTu estado volvió automáticamente a LIBRE.`);
       }
-      setActiveTrip(null);
+    } catch (err) {
+      console.error('Error al finalizar viaje:', err);
     }
-    setIsOnline(!isOnline);
+    setActiveTrip(null);
+    setEnEspera(false);
+    setMinutosEspera(0);
+    setEsperaIntervalId(null);
+    setIsOnline(true); // Pasa automáticamente a LIBRE
+    cargarRecaudacionHoy();
+  };
+
+  const cancelarViajeActivo = async () => {
+    if (!activeTrip) return;
+    if (!window.confirm('¿Estás seguro de que deseas cancelar este viaje? Volverás automáticamente al estado LIBRE.')) return;
+    try {
+      if (esperaIntervalId) clearInterval(esperaIntervalId);
+      await fetch(`${API_URL}/api/viajes/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: activeTrip.id,
+          chofer_id: chofer.id,
+          cancelado_por: 'chofer'
+        })
+      });
+    } catch (e) {
+      console.error('Error al cancelar viaje:', e);
+    }
+    setActiveTrip(null);
+    setConfirmadoJubilado(false);
+    setEnEspera(false);
+    setMinutosEspera(0);
+    setEsperaIntervalId(null);
+    setIsOnline(true); // Vuelve automáticamente a LIBRE
+    alert('Viaje cancelado. Tu estado volvió automáticamente a LIBRE.');
   };
 
   const finalizarViajeTelefonico = async () => {
@@ -506,32 +581,32 @@ export default function MainScreen({ route, navigation }) {
         </View>
       )}
 
-      {/* HUD Superior de Estado del Chofer (Glassmorphism) */}
+      {/* HUD Superior de Estado Automático del Chofer (Glassmorphism) */}
       <View style={[
         styles.header, 
         { 
           backgroundColor: 'rgba(15, 23, 42, 0.94)', 
           borderColor: viajeTelefonicoActivo 
             ? '#f59e0b' 
-            : (isOnline ? '#10b981' : 'rgba(239, 68, 68, 0.6)'),
+            : (activeTrip ? '#ef4444' : '#10b981'),
           boxShadow: viajeTelefonicoActivo 
             ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(245, 158, 11, 0.35)' 
-            : (isOnline 
-                ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.35)' 
-                : '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(239, 68, 68, 0.25)')
+            : (activeTrip 
+                ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(239, 68, 68, 0.35)' 
+                : '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.35)')
         }
       ]}>
         <View style={[
           styles.statusIndicator, 
           { 
-            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (isOnline ? '#10b981' : '#ef4444'),
-            boxShadow: viajeTelefonicoActivo ? '0 0 8px #f59e0b' : (isOnline ? '0 0 8px #10b981' : '0 0 8px #ef4444')
+            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
+            boxShadow: viajeTelefonicoActivo ? '0 0 8px #f59e0b' : (activeTrip ? '0 0 8px #ef4444' : '0 0 8px #10b981')
           }
         ]} />
         <Text style={[styles.statusText, { color: '#f8fafc' }]}>
           {viajeTelefonicoActivo 
-            ? 'VIAJE TELEFÓNICO EN CURSO' 
-            : (isOnline ? 'EN LÍNEA • DISPONIBLE PARA VIAJES' : 'FUERA DE SERVICIO • EN PAUSA')}
+            ? 'OCUPADO • VIAJE TELEFÓNICO EN CURSO' 
+            : (activeTrip ? 'OCUPADO • EN VIAJE ACTIVO' : 'EN LÍNEA • LIBRE (AUTOMÁTICO)')}
         </Text>
       </View>
 
@@ -557,13 +632,13 @@ export default function MainScreen({ route, navigation }) {
               Recaudación de Hoy
             </Text>
             <Text style={{ color: '#10b981', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>
-              $0
+              ${recaudacionHoy.toLocaleString('es-AR')}
             </Text>
           </View>
           <View style={{
-            backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.12)',
+            backgroundColor: (activeTrip || viajeTelefonicoActivo) ? 'rgba(239, 68, 68, 0.14)' : 'rgba(16, 185, 129, 0.15)',
             borderWidth: 1,
-            borderColor: isOnline ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.3)',
+            borderColor: (activeTrip || viajeTelefonicoActivo) ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)',
             paddingVertical: 6,
             paddingHorizontal: 10,
             borderRadius: 12,
@@ -572,8 +647,8 @@ export default function MainScreen({ route, navigation }) {
             <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
               Móvil #{chofer.numero_movil || '14'}
             </Text>
-            <Text style={{ color: isOnline ? '#34d399' : '#f87171', fontSize: 11, fontWeight: '800' }}>
-              {isOnline ? '● Conectado' : '○ En Pausa'}
+            <Text style={{ color: (activeTrip || viajeTelefonicoActivo) ? '#f87171' : '#34d399', fontSize: 11, fontWeight: '800' }}>
+              {(activeTrip || viajeTelefonicoActivo) ? '● Ocupado (En Viaje)' : '● Libre (Automático)'}
             </Text>
           </View>
         </View>
@@ -653,40 +728,49 @@ export default function MainScreen({ route, navigation }) {
             >
               <Text style={styles.buttonText}>🚀 Empezar Recorrido</Text>
             </TouchableOpacity>
-          </>
-        ) : (
-          <View>
-            {activeTrip && activeTrip.estado === 'en_viaje' && (
-              <TouchableOpacity 
-                style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 12, boxShadow: enEspera ? '0 4px 20px rgba(245, 158, 11, 0.4)' : '0 4px 20px rgba(59, 130, 246, 0.4)' }]}
-                onPress={handleToggleEspera}
-              >
-                <Text style={styles.buttonText}>
-                  {enEspera ? `⏸️ Pausar Espera (${minutosEspera} min)` : `⏳ Iniciar Espera (${minutosEspera} min)`}
-                </Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity 
               style={[
                 styles.button, 
                 { 
-                  backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981'),
-                  boxShadow: isOnline 
-                    ? '0 4px 20px rgba(239, 68, 68, 0.4)' 
-                    : (activeTrip ? '0 4px 20px rgba(239, 68, 68, 0.4)' : '0 4px 22px rgba(16, 185, 129, 0.45)')
+                  backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                  borderColor: 'rgba(239, 68, 68, 0.45)',
+                  borderWidth: 1.5,
+                  marginTop: 10,
+                  paddingVertical: 12
                 }
               ]}
-              onPress={handleToggleStatus}
+              onPress={cancelarViajeActivo}
+            >
+              <Text style={[styles.buttonText, { color: '#f87171', fontSize: 14 }]}>✕ Cancelar Viaje (Volver a Libre)</Text>
+            </TouchableOpacity>
+          </>
+        ) : activeTrip && activeTrip.estado === 'en_viaje' ? (
+          <View>
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 12, boxShadow: enEspera ? '0 4px 20px rgba(245, 158, 11, 0.4)' : '0 4px 20px rgba(59, 130, 246, 0.4)' }]}
+              onPress={handleToggleEspera}
+            >
+              <Text style={styles.buttonText}>
+                {enEspera ? `⏸️ Pausar Espera (${minutosEspera} min)` : `⏳ Iniciar Espera (${minutosEspera} min)`}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.button, 
+                { 
+                  backgroundColor: '#ef4444',
+                  boxShadow: '0 4px 20px rgba(239, 68, 68, 0.4)'
+                }
+              ]}
+              onPress={handleFinishTrip}
               disabled={activeTrip && activeTrip.requiere_cierre_manual}
             >
               <Text style={styles.buttonText}>
-                {activeTrip 
-                  ? (activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : '🏁 Finalizar Viaje') 
-                  : (isOnline ? '⏸️ Pasar a Ocupado / Pausar Turno' : '⚡ Pasar a Libre (Comenzar Turno)')}
+                {activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : '🏁 Finalizar Viaje (Volver a Libre)'}
               </Text>
             </TouchableOpacity>
 
-            {activeTrip && activeTrip.estado === 'en_viaje' && !activeTrip.requiere_cierre_manual && (
+            {!activeTrip.requiere_cierre_manual && (
               <TouchableOpacity 
                 style={[styles.button, { backgroundColor: 'rgba(100, 116, 139, 0.6)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, marginTop: 10 }]}
                 onPress={handleRequestManualClose}
@@ -694,6 +778,32 @@ export default function MainScreen({ route, navigation }) {
                 <Text style={[styles.buttonText, { fontSize: 13, color: '#cbd5e1' }]}>⚠️ Cerrar por Falla GPS (Operador)</Text>
               </TouchableOpacity>
             )}
+
+            {!activeTrip.requiere_cierre_manual && (
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: 'rgba(239, 68, 68, 0.14)', borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1, marginTop: 8, paddingVertical: 11 }]}
+                onPress={cancelarViajeActivo}
+              >
+                <Text style={[styles.buttonText, { fontSize: 13, color: '#f87171' }]}>✕ Cancelar Viaje</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            borderColor: 'rgba(16, 185, 129, 0.35)',
+            borderWidth: 1.5,
+            borderRadius: 16,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            alignItems: 'center'
+          }}>
+            <Text style={{ color: '#34d399', fontWeight: '900', fontSize: 14, letterSpacing: 0.3, textAlign: 'center' }}>
+              🟢 MÓVIL LIBRE • RECEPCIÓN AUTOMÁTICA ACTIVA
+            </Text>
+            <Text style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', marginTop: 4, lineHeight: 17 }}>
+              Pasarás a Ocupado automáticamente al aceptar un viaje o recibir uno de la Base, y volverás a Libre al finalizarlo o cancelarlo.
+            </Text>
           </View>
         )}
       </View>

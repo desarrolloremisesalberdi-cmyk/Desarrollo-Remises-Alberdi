@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image, Dimensions, Vibration, ActivityIndicator, Modal } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -10,13 +10,15 @@ const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 export default function MainScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
-  const [isOnline, setIsOnline] = useState(false);
+  // Estado automático: el chofer inicia siempre como LIBRE (isOnline = true) y pasa a OCUPADO solo cuando tiene viaje activo
+  const [isOnline, setIsOnline] = useState(true);
   const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [activeTrip, setActiveTrip] = useState(null);
   const [location, setLocation] = useState(null);
   const [socket, setSocket] = useState(null);
   const [incomingRide, setIncomingRide] = useState(null);
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
+  const [recaudacionHoy, setRecaudacionHoy] = useState(0);
   
   const [enEspera, setEnEspera] = useState(false);
   const [minutosEspera, setMinutosEspera] = useState(0);
@@ -37,10 +39,31 @@ export default function MainScreen({ route, navigation }) {
   const locationRef = useRef(location);
   const isOnlineRef = useRef(isOnline);
   const activeTripRef = useRef(activeTrip);
+  const viajeTelefonicoRef = useRef(viajeTelefonicoActivo);
 
   useEffect(() => { locationRef.current = location; }, [location]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { activeTripRef.current = activeTrip; }, [activeTrip]);
+  useEffect(() => { viajeTelefonicoRef.current = viajeTelefonicoActivo; }, [viajeTelefonicoActivo]);
+
+  const cargarRecaudacionHoy = async () => {
+    if (!chofer?.id || chofer.id === 'sim-native') return;
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/finanzas/chofer/${chofer.id}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.viajes)) {
+        const hoyStr = new Date().toDateString();
+        const totalHoy = data.viajes
+          .filter((v) => v.fecha && new Date(v.fecha).toDateString() === hoyStr)
+          .reduce((acc, v) => acc + (parseFloat(v.monto_calculado) || 0), 0);
+        setRecaudacionHoy(Math.round(totalHoy));
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    cargarRecaudacionHoy();
+  }, [chofer?.id]);
 
   useEffect(() => {
     const newSocket = io(SOCKET_URL, {
@@ -52,12 +75,14 @@ export default function MainScreen({ route, navigation }) {
 
     newSocket.on('connect', () => {
       console.log('Socket chofer conectado');
-      if (chofer && (isOnlineRef.current || activeTripRef.current)) {
+      if (chofer) {
+        const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         newSocket.emit('update_location', {
           chofer_id: chofer.id || chofer.dni,
           dni: chofer.dni,
           movil: chofer.numero_movil,
-          isOnline: isOnlineRef.current,
+          isOnline: !ocupado,
+          estado: ocupado ? 'ocupado' : 'libre',
           lat: locationRef.current ? locationRef.current.latitude : -33.044167,
           lng: locationRef.current ? locationRef.current.longitude : -61.168056,
           foto_url: chofer.foto_url || null
@@ -66,11 +91,11 @@ export default function MainScreen({ route, navigation }) {
     });
     
     newSocket.on('new_ride_request', (viaje) => {
-      if (viajeTelefonicoActivo) {
-        return; // Ocupado en viaje telefónico
+      if (viajeTelefonicoRef.current || activeTripRef.current) {
+        return; // Ocupado en otro viaje
       }
       // Si el viaje tiene chofer_destinado_id y no es este chofer, ignorar
-      if (viaje.chofer_destinado_id && viaje.chofer_destinado_id !== chofer.id) {
+      if (viaje.chofer_destinado_id && String(viaje.chofer_destinado_id) !== String(chofer.id)) {
         return;
       }
       setIncomingRide(viaje);
@@ -89,7 +114,7 @@ export default function MainScreen({ route, navigation }) {
             setViajeTelefonicoActivo(true);
             Alert.alert(
               '📞 VIAJE TELEFÓNICO ASIGNADO',
-              'La Base te ha asignado un viaje tomado por llamada telefónica.\n\nTu estado ahora es OCUPADO.\nEste viaje NO rinde comisión a la app (0% Comisión).\nAl completar el viaje, presiona "Finalizar Viaje y Ponerme Libre".'
+              'La Base te ha asignado un viaje tomado por llamada telefónica.\n\nTu estado cambió automáticamente a OCUPADO.\nEste viaje NO rinde comisión a la app (0% Comisión).\nAl completar el viaje, presiona "Finalizar Viaje" para volver a LIBRE automáticamente.'
             );
           }
         } else if (data.estado === 'libre') {
@@ -98,6 +123,24 @@ export default function MainScreen({ route, navigation }) {
         } else if (data.estado === 'inactivo') {
           setViajeTelefonicoActivo(false);
           setIsOnline(false);
+        }
+      }
+    });
+
+    newSocket.on('ride_cancelled', (data) => {
+      const isCurrentTrip = activeTripRef.current && String(activeTripRef.current.id) === String(data.viaje_id);
+      const isAssignedDriver = data.chofer_id && String(data.chofer_id) === String(chofer.id);
+      if (isCurrentTrip || isAssignedDriver) {
+        setActiveTrip(null);
+        setIncomingRide(null);
+        setComprobanteRecibido(null);
+        setComprobanteAprobado(false);
+        setConfirmadoJubilado(false);
+        setEnEspera(false);
+        setMinutosEspera(0);
+        setIsOnline(true); // Vuelve automáticamente a LIBRE
+        if (data.cancelado_por !== 'chofer') {
+          Alert.alert('⚠️ Viaje Cancelado', 'El viaje fue cancelado. Tu estado volvió automáticamente a LIBRE.');
         }
       }
     });
@@ -115,10 +158,11 @@ export default function MainScreen({ route, navigation }) {
     return () => {
       newSocket.off('new_ride_request');
       newSocket.off('driver_status_changed');
+      newSocket.off('ride_cancelled');
       newSocket.off('comprobante_recibido');
       newSocket.disconnect();
     };
-  }, [viajeTelefonicoActivo, chofer]);
+  }, [chofer]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -193,15 +237,16 @@ export default function MainScreen({ route, navigation }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
-        // Al desbloquear o abrir la app desde segundo plano
         if (socket) {
           if (!socket.connected) socket.connect();
-          if (chofer && (isOnlineRef.current || activeTripRef.current)) {
+          if (chofer) {
+            const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
             socket.emit('update_location', {
               chofer_id: chofer.id || chofer.dni,
               dni: chofer.dni,
               movil: chofer.numero_movil,
-              isOnline: isOnlineRef.current,
+              isOnline: !ocupado,
+              estado: ocupado ? 'ocupado' : 'libre',
               lat: locationRef.current ? locationRef.current.latitude : -33.044167,
               lng: locationRef.current ? locationRef.current.longitude : -61.168056,
               foto_url: chofer.foto_url || null
@@ -215,14 +260,16 @@ export default function MainScreen({ route, navigation }) {
 
   // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket y la posición
   useEffect(() => {
-    if (!isOnline && !activeTrip) return;
+    if (!isOnline && !activeTrip && !viajeTelefonicoActivo) return;
     const heartbeat = setInterval(() => {
       if (socket && chofer) {
+        const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         socket.emit('update_location', {
           chofer_id: chofer.id || chofer.dni,
           dni: chofer.dni,
           movil: chofer.numero_movil,
-          isOnline: isOnlineRef.current,
+          isOnline: !ocupado,
+          estado: ocupado ? 'ocupado' : 'libre',
           lat: locationRef.current ? locationRef.current.latitude : -33.044167,
           lng: locationRef.current ? locationRef.current.longitude : -61.168056,
           foto_url: chofer.foto_url || null
@@ -230,7 +277,7 @@ export default function MainScreen({ route, navigation }) {
       }
     }, 12000);
     return () => clearInterval(heartbeat);
-  }, [socket, chofer, isOnline, activeTrip]);
+  }, [socket, chofer, isOnline, activeTrip, viajeTelefonicoActivo]);
 
   // Obtener ubicación inicial inmediatamente al cargar la pantalla
   useEffect(() => {
@@ -261,21 +308,23 @@ export default function MainScreen({ route, navigation }) {
     let subscription = null;
     
     (async () => {
-      if (isOnline || activeTrip) {
+      if (isOnline || activeTrip || viajeTelefonicoActivo) {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Error', 'Se requiere permiso de ubicación para trabajar');
-          setIsOnline(false);
           return;
         }
 
-        // Send immediate pulse before waiting for GPS lock
+        const ocupadoActual = Boolean(activeTrip || viajeTelefonicoActivo);
+
+        // Enviar pulso inmediato con el estado real (libre vs ocupado)
         if (socket && chofer) {
           socket.emit('update_location', {
             chofer_id: chofer.id,
             dni: chofer.dni,
             movil: chofer.numero_movil,
-            isOnline: true,
+            isOnline: !ocupadoActual,
+            estado: ocupadoActual ? 'ocupado' : 'libre',
             lat: location ? location.latitude : -33.044167,
             lng: location ? location.longitude : -61.168056,
             foto_url: chofer.foto_url || null
@@ -301,10 +350,13 @@ export default function MainScreen({ route, navigation }) {
               }, 600);
             }
             if (socket && chofer) {
+              const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
               socket.emit('update_location', {
                 chofer_id: chofer.id,
                 dni: chofer.dni,
-                isOnline: isOnline,
+                movil: chofer.numero_movil,
+                isOnline: !ocupado,
+                estado: ocupado ? 'ocupado' : 'libre',
                 lat: latitude,
                 lng: longitude,
                 foto_url: chofer.foto_url || null
@@ -320,7 +372,9 @@ export default function MainScreen({ route, navigation }) {
           socket.emit('update_location', {
             chofer_id: chofer.id,
             dni: chofer.dni,
+            movil: chofer.numero_movil,
             isOnline: false,
+            estado: 'inactivo',
             lat: location ? location.latitude : -33.044167,
             lng: location ? location.longitude : -61.168056,
             foto_url: chofer.foto_url || null
@@ -334,7 +388,7 @@ export default function MainScreen({ route, navigation }) {
         subscription.remove();
       }
     };
-  }, [isOnline, activeTrip, socket]);
+  }, [isOnline, activeTrip, viajeTelefonicoActivo, socket]);
 
   // Si no está online, limpiamos la notificación
   useEffect(() => {
@@ -488,37 +542,77 @@ export default function MainScreen({ route, navigation }) {
     }
   };
 
-  const handleToggleStatus = async () => {
-    if (!isOnline && activeTrip && activeTrip.estado === 'en_viaje') {
-      try {
-        if (esperaIntervalId) clearInterval(esperaIntervalId);
-        const response = await fetch(`${SOCKET_URL}/api/viajes/finish`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            viaje_id: activeTrip.id,
-            chofer_id: chofer.id,
-            fin_lat: location ? location.latitude : -33.046,
-            fin_lng: location ? location.longitude : -61.169,
-            espera_minutos: minutosEspera
-          })
-        });
-        const data = await response.json();
-        if (data.success) {
-          Alert.alert(
-            'Viaje Finalizado', 
-            `Distancia: ${data.viaje.distancia_km.toFixed(2)} km\nMonto a Cobrar: $${data.viaje.monto_calculado}\nComisión Base: $${data.viaje.comision_admin}`
-          );
-        }
-      } catch (err) {
-        console.error('Error al finalizar viaje:', err);
+  const handleFinishTrip = async () => {
+    if (!activeTrip) return;
+    try {
+      if (esperaIntervalId) clearInterval(esperaIntervalId);
+      const response = await fetch(`${SOCKET_URL}/api/viajes/finish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viaje_id: activeTrip.id,
+          chofer_id: chofer.id,
+          fin_lat: location ? location.latitude : -33.046,
+          fin_lng: location ? location.longitude : -61.169,
+          espera_minutos: minutosEspera
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        Alert.alert(
+          '✅ Viaje Finalizado', 
+          `Distancia: ${data.viaje.distancia_km.toFixed(2)} km\nMonto a Cobrar: $${data.viaje.monto_calculado}\nComisión Base: $${data.viaje.comision_admin}\n\nTu estado volvió automáticamente a LIBRE.`
+        );
       }
-      setActiveTrip(null);
-      setEnEspera(false);
-      setMinutosEspera(0);
-      setEsperaIntervalId(null);
+    } catch (err) {
+      console.error('Error al finalizar viaje:', err);
     }
-    setIsOnline(!isOnline);
+    setActiveTrip(null);
+    setEnEspera(false);
+    setMinutosEspera(0);
+    setEsperaIntervalId(null);
+    setIsOnline(true); // Pasa automáticamente a LIBRE
+    cargarRecaudacionHoy();
+  };
+
+  const cancelarViajeActivo = () => {
+    if (!activeTrip) return;
+    Alert.alert(
+      'Cancelar Viaje',
+      '¿Estás seguro de que deseas cancelar este viaje? Volverás automáticamente al estado LIBRE.',
+      [
+        { text: 'No, continuar viaje', style: 'cancel' },
+        {
+          text: 'Sí, cancelar viaje',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (esperaIntervalId) clearInterval(esperaIntervalId);
+              await fetch(`${SOCKET_URL}/api/viajes/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  viaje_id: activeTrip.id,
+                  chofer_id: chofer.id,
+                  cancelado_por: 'chofer'
+                })
+              });
+            } catch (e) {
+              console.error('Error al cancelar viaje:', e);
+            }
+            setActiveTrip(null);
+            setComprobanteRecibido(null);
+            setComprobanteAprobado(false);
+            setConfirmadoJubilado(false);
+            setEnEspera(false);
+            setMinutosEspera(0);
+            setEsperaIntervalId(null);
+            setIsOnline(true); // Vuelve automáticamente a LIBRE
+            Alert.alert('Viaje Cancelado', 'El viaje fue cancelado y tu estado volvió automáticamente a LIBRE.');
+          }
+        }
+      ]
+    );
   };
 
   const finalizarViajeTelefonico = async () => {
@@ -692,15 +786,15 @@ export default function MainScreen({ route, navigation }) {
         </View>
       )}
       
-      {/* HUD Superior de Estado del Chofer (Glassmorphism) */}
+      {/* HUD Superior de Estado Automático del Chofer (Glassmorphism) */}
       <View style={[
         styles.header, 
         { 
           backgroundColor: 'rgba(15, 23, 42, 0.94)', 
           borderColor: viajeTelefonicoActivo 
             ? '#f59e0b' 
-            : (isOnline ? '#10b981' : 'rgba(239, 68, 68, 0.6)'),
-          shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (isOnline ? '#10b981' : '#ef4444'),
+            : (activeTrip ? '#ef4444' : '#10b981'),
+          shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
           shadowOpacity: 0.35,
           shadowRadius: 10,
           elevation: 8,
@@ -709,8 +803,8 @@ export default function MainScreen({ route, navigation }) {
         <View style={[
           styles.statusIndicator, 
           { 
-            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (isOnline ? '#10b981' : '#ef4444'),
-            shadowColor: isOnline ? '#10b981' : '#ef4444',
+            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
+            shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
             shadowOpacity: 0.8,
             shadowRadius: 6,
             elevation: 4,
@@ -718,8 +812,8 @@ export default function MainScreen({ route, navigation }) {
         ]} />
         <Text style={[styles.statusText, { color: '#f8fafc' }]}>
           {viajeTelefonicoActivo 
-            ? 'VIAJE TELEFÓNICO EN CURSO' 
-            : (isOnline ? 'EN LÍNEA • DISPONIBLE PARA VIAJES' : 'FUERA DE SERVICIO • EN PAUSA')}
+            ? 'OCUPADO • VIAJE TELEFÓNICO EN CURSO' 
+            : (activeTrip ? 'OCUPADO • EN VIAJE ACTIVO' : 'EN LÍNEA • LIBRE (AUTOMÁTICO)')}
         </Text>
       </View>
 
@@ -745,13 +839,13 @@ export default function MainScreen({ route, navigation }) {
               Recaudación de Hoy
             </Text>
             <Text style={{ color: '#10b981', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>
-              $0
+              ${recaudacionHoy.toLocaleString('es-AR')}
             </Text>
           </View>
           <View style={{
-            backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.12)',
+            backgroundColor: (activeTrip || viajeTelefonicoActivo) ? 'rgba(239, 68, 68, 0.14)' : 'rgba(16, 185, 129, 0.15)',
             borderWidth: 1,
-            borderColor: isOnline ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.3)',
+            borderColor: (activeTrip || viajeTelefonicoActivo) ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)',
             paddingVertical: 6,
             paddingHorizontal: 10,
             borderRadius: 12,
@@ -760,8 +854,8 @@ export default function MainScreen({ route, navigation }) {
             <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
               Móvil #{chofer.numero_movil || '14'}
             </Text>
-            <Text style={{ color: isOnline ? '#34d399' : '#f87171', fontSize: 11, fontWeight: '800' }}>
-              {isOnline ? '● Conectado' : '○ En Pausa'}
+            <Text style={{ color: (activeTrip || viajeTelefonicoActivo) ? '#f87171' : '#34d399', fontSize: 11, fontWeight: '800' }}>
+              {(activeTrip || viajeTelefonicoActivo) ? '● Ocupado (En Viaje)' : '● Libre (Automático)'}
             </Text>
           </View>
         </View>
@@ -946,40 +1040,52 @@ export default function MainScreen({ route, navigation }) {
             >
               <Text style={styles.buttonText}>🚀 Empezar Recorrido</Text>
             </TouchableOpacity>
-          </>
-        ) : (
-          <View>
-            {activeTrip && activeTrip.estado === 'en_viaje' && (
-              <TouchableOpacity 
-                style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 12, shadowColor: enEspera ? '#f59e0b' : '#3b82f6', shadowOpacity: 0.4, elevation: 5 }]}
-                onPress={handleToggleEspera}
-              >
-                <Text style={styles.buttonText}>
-                  {enEspera ? `⏸️ Pausar Espera (${minutosEspera} min)` : `⏳ Iniciar Espera (${minutosEspera} min)`}
-                </Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity 
               style={[
                 styles.button, 
                 { 
-                  backgroundColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981'),
-                  shadowColor: isOnline ? '#ef4444' : (activeTrip ? '#ef4444' : '#10b981'),
+                  backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                  borderColor: 'rgba(239, 68, 68, 0.45)',
+                  borderWidth: 1.5,
+                  marginTop: 10,
+                  paddingVertical: 12
+                }
+              ]}
+              onPress={cancelarViajeActivo}
+            >
+              <Text style={[styles.buttonText, { color: '#f87171', fontSize: 14 }]}>✕ Cancelar Viaje (Volver a Libre)</Text>
+            </TouchableOpacity>
+          </>
+        ) : activeTrip && activeTrip.estado === 'en_viaje' ? (
+          <View>
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: enEspera ? '#f59e0b' : '#3b82f6', marginBottom: 12, shadowColor: enEspera ? '#f59e0b' : '#3b82f6', shadowOpacity: 0.4, elevation: 5 }]}
+              onPress={handleToggleEspera}
+            >
+              <Text style={styles.buttonText}>
+                {enEspera ? `⏸️ Pausar Espera (${minutosEspera} min)` : `⏳ Iniciar Espera (${minutosEspera} min)`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[
+                styles.button, 
+                { 
+                  backgroundColor: '#ef4444',
+                  shadowColor: '#ef4444',
                   shadowOpacity: 0.45,
                   elevation: 6
                 }
               ]}
-              onPress={handleToggleStatus}
+              onPress={handleFinishTrip}
               disabled={activeTrip && activeTrip.requiere_cierre_manual}
             >
               <Text style={styles.buttonText}>
-                {activeTrip 
-                  ? (activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : '🏁 Finalizar Viaje') 
-                  : (isOnline ? '⏸️ Pasar a Ocupado / Pausar Turno' : '⚡ Pasar a Libre (Comenzar Turno)')}
+                {activeTrip.requiere_cierre_manual ? 'Esperando al operador...' : '🏁 Finalizar Viaje (Volver a Libre)'}
               </Text>
             </TouchableOpacity>
 
-            {activeTrip && activeTrip.estado === 'en_viaje' && !activeTrip.requiere_cierre_manual && (
+            {!activeTrip.requiere_cierre_manual && (
               <TouchableOpacity 
                 style={[styles.button, { backgroundColor: 'rgba(100, 116, 139, 0.6)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, marginTop: 10 }]}
                 onPress={handleRequestManualClose}
@@ -987,6 +1093,32 @@ export default function MainScreen({ route, navigation }) {
                 <Text style={[styles.buttonText, { fontSize: 13, color: '#cbd5e1' }]}>⚠️ Cerrar por Falla GPS (Operador)</Text>
               </TouchableOpacity>
             )}
+
+            {!activeTrip.requiere_cierre_manual && (
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: 'rgba(239, 68, 68, 0.14)', borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1, marginTop: 8, paddingVertical: 11 }]}
+                onPress={cancelarViajeActivo}
+              >
+                <Text style={[styles.buttonText, { fontSize: 13, color: '#f87171' }]}>✕ Cancelar Viaje</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={{
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            borderColor: 'rgba(16, 185, 129, 0.35)',
+            borderWidth: 1.5,
+            borderRadius: 16,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            alignItems: 'center'
+          }}>
+            <Text style={{ color: '#34d399', fontWeight: '900', fontSize: 14, letterSpacing: 0.3, textAlign: 'center' }}>
+              🟢 MÓVIL LIBRE • RECEPCIÓN AUTOMÁTICA ACTIVA
+            </Text>
+            <Text style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', marginTop: 4, lineHeight: 17 }}>
+              Pasarás a Ocupado automáticamente al aceptar un viaje o recibir uno de la Base, y volverás a Libre al finalizarlo o cancelarlo.
+            </Text>
           </View>
         )}
       </View>

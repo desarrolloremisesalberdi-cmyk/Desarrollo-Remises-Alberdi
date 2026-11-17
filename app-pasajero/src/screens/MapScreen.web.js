@@ -188,6 +188,20 @@ export default function MapScreen({ route, navigation }) {
       }
     });
 
+    socket.on('ride_cancelled', (data) => {
+      if (data.pasajero_id === user.id) {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        setEstadoViaje(null);
+        setSolicitando(false);
+        setChoferEsperado(null);
+        setChoferAsignado(null);
+        setMensajeEspera(null);
+        if (data.cancelado_por !== 'pasajero') {
+          window.alert('⚠️ El chofer ha cancelado el viaje. Puedes solicitar otro móvil cuando lo desees.');
+        }
+      }
+    });
+
     return () => {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       socket.off('ride_accepted');
@@ -196,8 +210,34 @@ export default function MapScreen({ route, navigation }) {
       socket.off('toggle_espera');
       socket.off('ride_driver_timeout');
       socket.off('ride_driver_rejected');
+      socket.off('ride_cancelled');
     };
   }, [user.id]);
+
+  const cancelarViajePasajero = async () => {
+    if (!window.confirm('¿Deseas cancelar la solicitud de taxi actual?')) return;
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    try {
+      if (viajeId) {
+        await fetch(`${API_URL}/api/viajes/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            viaje_id: viajeId,
+            chofer_id: choferAsignado?.id || choferEsperado?.id || null,
+            cancelado_por: 'pasajero'
+          })
+        });
+      }
+    } catch (e) {
+      console.log('Error al cancelar viaje:', e);
+    }
+    setEstadoViaje(null);
+    setSolicitando(false);
+    setChoferEsperado(null);
+    setChoferAsignado(null);
+    setMensajeEspera(null);
+  };
 
   const fetchHistorial = async () => {
     if (!user.id) return;
@@ -875,33 +915,43 @@ export default function MapScreen({ route, navigation }) {
         )}
 
         {estadoViaje && (
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: estadoViaje.includes('finalizado') ? '#3b82f6' : '#10b981'}]} 
-            onPress={() => {
-              if (estadoViaje.includes('finalizado')) {
-                if (choferAsignado) {
-                  setTripToRate({
-                    viaje_id: viajeId,
-                    chofer: choferAsignado,
-                    origen: origenTexto,
-                    destino: destinoTexto
-                  });
-                  setEstrellas(5);
-                  setComentarioCalificacion('');
-                  setEtiquetasSeleccionadas([]);
-                  setModalCalificacion(true);
+          <View style={{ gap: 10 }}>
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: estadoViaje.includes('finalizado') ? '#3b82f6' : '#10b981'}]} 
+              onPress={() => {
+                if (estadoViaje.includes('finalizado')) {
+                  if (choferAsignado) {
+                    setTripToRate({
+                      viaje_id: viajeId,
+                      chofer: choferAsignado,
+                      origen: origenTexto,
+                      destino: destinoTexto
+                    });
+                    setEstrellas(5);
+                    setComentarioCalificacion('');
+                    setEtiquetasSeleccionadas([]);
+                    setModalCalificacion(true);
+                  }
+                  setEstadoViaje(null);
+                  setChoferAsignado(null);
+                  setOrigenTexto('');
+                  setDestinoTexto('');
                 }
-                setEstadoViaje(null);
-                setChoferAsignado(null);
-                setOrigenTexto('');
-                setDestinoTexto('');
-              }
-            }}
-          >
-            <Text style={styles.buttonText}>
-              {estadoViaje.includes('finalizado') ? 'Pedir otro viaje' : 'Taxi Solicitado ✓'}
-            </Text>
-          </TouchableOpacity>
+              }}
+            >
+              <Text style={styles.buttonText}>
+                {estadoViaje.includes('finalizado') ? 'Pedir otro viaje' : 'Taxi Solicitado ✓'}
+              </Text>
+            </TouchableOpacity>
+            {!estadoViaje.includes('finalizado') && !estadoViaje.includes('En viaje') && (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: 'rgba(239, 68, 68, 0.16)', borderWidth: 1.5, borderColor: 'rgba(239, 68, 68, 0.45)', paddingVertical: 11 }]}
+                onPress={cancelarViajePasajero}
+              >
+                <Text style={[styles.buttonText, { color: '#f87171', fontSize: 13 }]}>✕ Cancelar Viaje</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 

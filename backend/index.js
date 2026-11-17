@@ -635,6 +635,23 @@ app.post('/api/choferes/login', async (req, res) => {
         if (chofer.suspendido) {
           return res.json({ success: false, error: 'suspended' });
         }
+        // Al iniciar sesión, el chofer entra automáticamente como LIBRE
+        await db.query(
+          "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
+          [chofer.id]
+        );
+        chofer.estado = 'libre';
+        chofer.is_online = true;
+
+        io.emit('driver_status_changed', {
+          chofer_id: chofer.id,
+          dni: chofer.dni,
+          numero_movil: chofer.numero_movil,
+          estado: 'libre',
+          isOnline: true,
+          origen: 'auto_login'
+        });
+
         // Eliminar la clave antes de enviarlo al cliente
         delete chofer.clave;
         res.json({ success: true, chofer });
@@ -664,9 +681,9 @@ app.post('/api/viajes/accept', async (req, res) => {
       [chofer_id, viaje_id]
     );
 
-    // Actualizar estado del chofer a ocupado
+    // Actualizar estado del chofer automáticamente a ocupado (manteniendo is_online = true para monitoreo en mapa)
     await db.query(
-      "UPDATE choferes SET estado = 'ocupado', is_online = false WHERE id = $1",
+      "UPDATE choferes SET estado = 'ocupado', is_online = true WHERE id = $1",
       [chofer_id]
     );
     
@@ -676,13 +693,23 @@ app.post('/api/viajes/accept', async (req, res) => {
     
     const viajeActualizado = result.rows[0];
 
-    // 2. Buscar datos del chofer para avisarle al pasajero
+    // 2. Buscar datos del chofer para avisarle al pasajero y al operador
     const choferQuery = await db.query(
-      'SELECT nombre, apellido, numero_movil, vehiculo_modelo, vehiculo_patente, foto_url, datos_pago FROM choferes WHERE id = $1',
+      'SELECT id, dni, nombre, apellido, numero_movil, vehiculo_modelo, vehiculo_patente, foto_url, datos_pago FROM choferes WHERE id = $1',
       [chofer_id]
     );
     
     const datosChofer = choferQuery.rows[0];
+
+    // Emitir cambio automático a OCUPADO para el panel operador y el chofer
+    io.emit('driver_status_changed', {
+      chofer_id: datosChofer ? datosChofer.id : chofer_id,
+      dni: datosChofer ? datosChofer.dni : undefined,
+      numero_movil: datosChofer ? datosChofer.numero_movil : undefined,
+      estado: 'ocupado',
+      isOnline: true,
+      origen: 'viaje_app'
+    });
 
     // 3. Emitir evento por socket para avisarle al pasajero
     io.emit('ride_accepted', {
@@ -790,16 +817,24 @@ app.post('/api/viajes/finish', async (req, res) => {
 
     const viajeActualizado = result.rows[0];
 
-    // Volver a poner al chofer libre
+    // Volver a poner al chofer libre automáticamente
     await db.query(
       "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
       [viajeActualizado.chofer_id]
     );
 
+    io.emit('driver_status_changed', {
+      chofer_id: viajeActualizado.chofer_id,
+      estado: 'libre',
+      isOnline: true,
+      origen: 'viaje_finalizado'
+    });
+
     // Avisar al pasajero del costo final y los datos de pago
     io.emit('ride_finished', {
       viaje_id: viaje_id,
       pasajero_id: viajeActualizado.usuario_id,
+      chofer_id: viajeActualizado.chofer_id,
       monto: montoCalculado,
       distancia: distanciaKm,
       datos_pago: datosPagoChofer
@@ -809,6 +844,68 @@ app.post('/api/viajes/finish', async (req, res) => {
   } catch (error) {
     console.error('Error al finalizar viaje:', error);
     res.status(500).json({ success: false, error: error.message || 'Error interno del servidor' });
+  }
+});
+
+// Cancelar un viaje (Chofer, Pasajero u Operador -> el chofer vuelve automáticamente a Libre)
+app.post('/api/viajes/cancel', async (req, res) => {
+  const { viaje_id, chofer_id, cancelado_por = 'usuario' } = req.body;
+  try {
+    if (activeRideTimeouts[viaje_id]) {
+      clearTimeout(activeRideTimeouts[viaje_id]);
+      delete activeRideTimeouts[viaje_id];
+    }
+
+    const viajeRes = await db.query('SELECT * FROM viajes WHERE id = $1', [viaje_id]);
+    if (viajeRes.rows.length === 0) {
+      if (chofer_id) {
+        await db.query("UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1 OR dni = $2", [chofer_id, String(chofer_id)]);
+        io.emit('driver_status_changed', {
+          chofer_id,
+          estado: 'libre',
+          isOnline: true,
+          origen: 'viaje_cancelado'
+        });
+      }
+      return res.json({ success: true });
+    }
+
+    const viajeActual = viajeRes.rows[0];
+    const targetChoferId = chofer_id || viajeActual.chofer_id;
+
+    const result = await db.query(
+      "UPDATE viajes SET estado = 'cancelado', hora_fin = NOW() WHERE id = $1 RETURNING *",
+      [viaje_id]
+    );
+    const viajeCancelado = result.rows[0];
+
+    if (targetChoferId) {
+      const chRes = await db.query(
+        "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1 RETURNING id, dni, numero_movil",
+        [targetChoferId]
+      );
+      const ch = chRes.rows[0];
+      io.emit('driver_status_changed', {
+        chofer_id: ch ? ch.id : targetChoferId,
+        dni: ch ? ch.dni : undefined,
+        numero_movil: ch ? ch.numero_movil : undefined,
+        estado: 'libre',
+        isOnline: true,
+        origen: 'viaje_cancelado'
+      });
+    }
+
+    io.emit('ride_cancelled', {
+      viaje_id: viajeCancelado.id,
+      pasajero_id: viajeCancelado.usuario_id,
+      chofer_id: targetChoferId,
+      cancelado_por
+    });
+
+    res.json({ success: true, viaje: viajeCancelado });
+  } catch (error) {
+    console.error('Error al cancelar viaje:', error);
+    res.status(500).json({ success: false, error: 'Error interno al cancelar el viaje' });
   }
 });
 
@@ -1000,16 +1097,24 @@ app.post('/api/viajes/force-close', async (req, res) => {
 
     const viajeActualizado = result.rows[0];
 
-    // Volver a poner al chofer libre
+    // Volver a poner al chofer libre automáticamente
     await db.query(
       "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
       [viajeActualizado.chofer_id]
     );
 
+    io.emit('driver_status_changed', {
+      chofer_id: viajeActualizado.chofer_id,
+      estado: 'libre',
+      isOnline: true,
+      origen: 'viaje_finalizado'
+    });
+
     // Avisar al pasajero del costo final
     io.emit('ride_finished', {
       viaje_id: viaje_id,
       pasajero_id: viajeActualizado.usuario_id,
+      chofer_id: viajeActualizado.chofer_id,
       monto: monto_manual,
       distancia: 0 // manual
     });
@@ -1378,15 +1483,20 @@ io.on('connection', (socket) => {
     // 1. Emitir a todos (Operador y otros) al instante
     socket.broadcast.emit('driver_location', data);
     
-    // 2. Persistir en la base de datos
+    // 2. Persistir en la base de datos respetando estado automático (libre vs ocupado)
     try {
-      if (data.isOnline) {
+      if (data.estado === 'ocupado') {
+        await db.query(
+          "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = 'ocupado' WHERE id = $3 OR dni = $4",
+          [data.lat, data.lng, data.chofer_id, data.dni]
+        );
+      } else if (data.isOnline) {
         await db.query(
           "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = 'libre' WHERE id = $3 OR dni = $4",
           [data.lat, data.lng, data.chofer_id, data.dni]
         );
       } else {
-        // App is open, just not ready to receive trips.
+        // Si isOnline es false en el pulso, está ocupado en un viaje activo o telefónico
         await db.query(
           "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
           [data.lat, data.lng, data.chofer_id, data.dni]

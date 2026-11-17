@@ -45,8 +45,10 @@ function DashboardMap() {
       setActiveDrivers((prev) => {
         const oldDriver = prev[data.chofer_id] || {};
         const oldEstado = oldDriver.estado || 'inactivo';
-        // Si la app móvil envía isOnline: true, está libre. Si envía false, está ocupado/inactivo.
-        const newEstado = data.isOnline ? 'libre' : (oldEstado === 'ocupado' ? 'ocupado' : 'inactivo');
+        // Si la app móvil envía estado explícito ('ocupado' | 'libre') lo usamos; si no, inferimos de isOnline.
+        const newEstado = data.estado
+          ? data.estado
+          : (data.isOnline ? 'libre' : (oldEstado === 'ocupado' ? 'ocupado' : 'inactivo'));
         
         return {
           ...prev,
@@ -75,13 +77,21 @@ function DashboardMap() {
 
     socket.on('driver_status_changed', (data) => {
       setActiveDrivers((prev) => {
-        if (!prev[data.chofer_id]) return prev;
+        const targetKey = Object.keys(prev).find((k) => {
+          const d = prev[k];
+          return (
+            String(k) === String(data.chofer_id) ||
+            (data.dni && String(d.dni) === String(data.dni)) ||
+            (data.numero_movil && String(d.movil) === String(data.numero_movil))
+          );
+        });
+        if (!targetKey) return prev;
         return {
           ...prev,
-          [data.chofer_id]: {
-            ...prev[data.chofer_id],
+          [targetKey]: {
+            ...prev[targetKey],
             estado: data.estado,
-            isOnline: data.isOnline !== undefined ? data.isOnline : prev[data.chofer_id].isOnline
+            isOnline: data.isOnline !== undefined ? data.isOnline : prev[targetKey].isOnline
           }
         };
       });

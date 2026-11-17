@@ -712,6 +712,24 @@ export default function MapScreen({ route, navigation }) {
       }
     });
 
+    socket.on('ride_cancelled', (data) => {
+      if (data.pasajero_id === user.id) {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        setEstadoViaje(null);
+        setSolicitando(false);
+        setChoferEsperado(null);
+        setChoferAsignado(null);
+        setMensajeEspera(null);
+        setComprobanteBase64(null);
+        setComprobanteUri(null);
+        setComprobanteEnviado(false);
+        setComprobanteAprobado(false);
+        if (data.cancelado_por !== 'pasajero') {
+          Alert.alert('⚠️ Viaje Cancelado', 'El chofer ha cancelado el viaje. Puedes solicitar otro móvil cuando lo desees.');
+        }
+      }
+    });
+
     return () => {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       socket.off('ride_accepted');
@@ -721,8 +739,50 @@ export default function MapScreen({ route, navigation }) {
       socket.off('comprobante_validado');
       socket.off('ride_driver_timeout');
       socket.off('ride_driver_rejected');
+      socket.off('ride_cancelled');
     };
   }, [user.id]);
+
+  const cancelarViajePasajero = () => {
+    Alert.alert(
+      'Cancelar Viaje',
+      '¿Deseas cancelar la solicitud de taxi actual?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Sí, cancelar',
+          style: 'destructive',
+          onPress: async () => {
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            try {
+              if (viajeId) {
+                await fetch(`${API_URL}/api/viajes/cancel`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    viaje_id: viajeId,
+                    chofer_id: choferAsignado?.id || choferEsperado?.id || null,
+                    cancelado_por: 'pasajero'
+                  })
+                });
+              }
+            } catch (e) {
+              console.log('Error al cancelar viaje:', e);
+            }
+            setEstadoViaje(null);
+            setSolicitando(false);
+            setChoferEsperado(null);
+            setChoferAsignado(null);
+            setMensajeEspera(null);
+            setComprobanteBase64(null);
+            setComprobanteUri(null);
+            setComprobanteEnviado(false);
+            setComprobanteAprobado(false);
+          }
+        }
+      ]
+    );
+  };
 
   useEffect(() => {
     navigation.setOptions({
@@ -1238,6 +1298,15 @@ export default function MapScreen({ route, navigation }) {
                 {estadoViaje.includes('finalizado') ? 'Pedir otro viaje' : 'Taxi Solicitado ✓'}
               </Text>
             </TouchableOpacity>
+
+            {!estadoViaje.includes('finalizado') && !estadoViaje.includes('En viaje') && (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: 'rgba(239, 68, 68, 0.16)', borderWidth: 1.5, borderColor: 'rgba(239, 68, 68, 0.45)', paddingVertical: 11 }]}
+                onPress={cancelarViajePasajero}
+              >
+                <Text style={[styles.buttonText, { color: '#f87171', fontSize: 13 }]}>✕ Cancelar Viaje</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
