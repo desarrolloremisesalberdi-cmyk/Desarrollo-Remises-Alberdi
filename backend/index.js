@@ -45,6 +45,12 @@ async function initCalificacionesTable() {
         BEGIN
           ALTER TABLE choferes ADD COLUMN total_calificaciones INT DEFAULT 0;
         EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE choferes ADD COLUMN carnet_foto_url TEXT;
+        EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE choferes ADD COLUMN tipo_chofer VARCHAR(50) DEFAULT 'Titular';
+        EXCEPTION WHEN duplicate_column THEN END;
 
         -- Tabla dedicada de calificaciones
         CREATE TABLE IF NOT EXISTS calificaciones (
@@ -579,7 +585,7 @@ app.post('/api/tarifas', async (req, res) => {
 app.post('/api/choferes/register', async (req, res) => {
   const { 
     nombre, apellido, email, telefono, domicilio, dni, 
-    fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, 
+    fecha_nacimiento, licencia_vencimiento, numero_movil, tipo_chofer, vehiculo_modelo, 
     vehiculo_color, vehiculo_patente, datos_cobro, 
     foto_perfil_base64, foto_carnet_base64, foto_dni_base64, foto_auto_base64, clave 
   } = req.body;
@@ -604,12 +610,13 @@ app.post('/api/choferes/register', async (req, res) => {
     const safeLicenciaVencimiento = (licencia_vencimiento && String(licencia_vencimiento).trim() !== '') ? String(licencia_vencimiento).trim() : null;
     const safeEmail = (email && String(email).trim() !== '') ? String(email).trim() : null;
     const safeNumeroMovil = (numero_movil !== undefined && numero_movil !== null && String(numero_movil).trim() !== '') ? parseInt(numero_movil, 10) : null;
+    const safeTipoChofer = (tipo_chofer && String(tipo_chofer).trim() !== '') ? String(tipo_chofer).trim() : 'Titular';
 
     const result = await db.query(
       `INSERT INTO choferes 
-       (nombre, apellido, email, clave, telefono, domicilio, dni, fecha_nacimiento, licencia_vencimiento, numero_movil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_pago, foto_url, dni_foto_url, vehiculo_foto_url, estado, created_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'inactivo', NOW()) RETURNING *`,
-      [nombre, apellido, safeEmail, defaultPassword, telefono, domicilio, dni, safeFechaNacimiento, safeLicenciaVencimiento, safeNumeroMovil, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl]
+       (nombre, apellido, email, clave, telefono, domicilio, dni, fecha_nacimiento, licencia_vencimiento, numero_movil, tipo_chofer, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_pago, foto_url, dni_foto_url, vehiculo_foto_url, carnet_foto_url, estado, created_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'inactivo', NOW()) RETURNING *`,
+      [nombre, apellido, safeEmail, defaultPassword, telefono, domicilio, dni, safeFechaNacimiento, safeLicenciaVencimiento, safeNumeroMovil, safeTipoChofer, vehiculo_modelo, vehiculo_color, vehiculo_patente, datos_cobro, fotoPerfilUrl, fotoDniUrl, fotoAutoUrl, fotoCarnetUrl]
     );
 
     res.json({ success: true, chofer: result.rows[0] });
@@ -1413,7 +1420,7 @@ app.get('/api/choferes/activos', async (req, res) => {
 app.get('/api/choferes', async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, nombre, apellido, dni, numero_movil, estado, vehiculo_modelo, vehiculo_patente, vehiculo_color, datos_pago, domicilio, telefono, email, fecha_nacimiento, is_online, lat, lng, foto_url, dni_foto_url, vehiculo_foto_url, suspendido, licencia_vencimiento, COALESCE(calificacion_promedio, 5.0) as calificacion_promedio, COALESCE(total_calificaciones, 0) as total_calificaciones FROM choferes ORDER BY nombre ASC"
+      "SELECT id, nombre, apellido, dni, numero_movil, COALESCE(tipo_chofer, 'Titular') as tipo_chofer, estado, vehiculo_modelo, vehiculo_patente, vehiculo_color, datos_pago, domicilio, telefono, email, fecha_nacimiento, is_online, lat, lng, foto_url, dni_foto_url, vehiculo_foto_url, carnet_foto_url, suspendido, licencia_vencimiento, created_at, COALESCE(calificacion_promedio, 5.0) as calificacion_promedio, COALESCE(total_calificaciones, 0) as total_calificaciones FROM choferes ORDER BY nombre ASC"
     );
     res.json({ success: true, choferes: result.rows });
   } catch (error) {
@@ -1621,6 +1628,34 @@ app.post('/api/choferes/toggle-suspend', async (req, res) => {
     res.status(500).json({ success: false, error: 'Error del servidor' });
   }
 });
+// Restablecer / Cambiar clave del chofer desde el panel del operador
+app.post('/api/choferes/:id/reset-password', async (req, res) => {
+  const { id } = req.params;
+  const { nueva_clave } = req.body;
+  if (!nueva_clave || String(nueva_clave).trim().length < 4) {
+    return res.status(400).json({ success: false, error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
+  }
+  try {
+    const safeId = isNaN(Number(id)) ? id : Number(id);
+    const hashedPassword = await bcrypt.hash(String(nueva_clave).trim(), 10);
+    const result = await db.query(
+      'UPDATE choferes SET clave = $1 WHERE id = $2 RETURNING id, nombre, apellido, dni, numero_movil',
+      [hashedPassword, safeId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Chofer no encontrado.' });
+    }
+    res.json({
+      success: true,
+      message: 'Contraseña del chofer actualizada correctamente.',
+      chofer: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error restableciendo clave del chofer:', error);
+    res.status(500).json({ success: false, error: 'Error interno al cambiar la contraseña.' });
+  }
+});
+
 // Editing driver
 app.put('/api/choferes/:id', async (req, res) => {
   const { id } = req.params;
@@ -1629,6 +1664,7 @@ app.put('/api/choferes/:id', async (req, res) => {
     apellido, 
     dni, 
     numero_movil, 
+    tipo_chofer,
     vehiculo_modelo, 
     vehiculo_patente, 
     vencimiento_carnet, 
@@ -1640,7 +1676,9 @@ app.put('/api/choferes/:id', async (req, res) => {
     vehiculo_color, 
     foto_perfil_base64, 
     foto_dni_base64, 
-    foto_auto_base64 
+    foto_auto_base64,
+    foto_carnet_base64,
+    nueva_clave
   } = req.body;
 
   try {
@@ -1648,7 +1686,13 @@ app.put('/api/choferes/:id', async (req, res) => {
     const safeVencimientoCarnet = (vencimiento_carnet && String(vencimiento_carnet).trim() !== '') ? String(vencimiento_carnet).trim() : null;
     const safeEmail = (email && String(email).trim() !== '') ? String(email).trim() : null;
     const safeNumeroMovil = (numero_movil !== undefined && numero_movil !== null && String(numero_movil).trim() !== '') ? parseInt(numero_movil, 10) : null;
+    const safeTipoChofer = (tipo_chofer && String(tipo_chofer).trim() !== '') ? String(tipo_chofer).trim() : 'Titular';
     const safeId = isNaN(Number(id)) ? id : Number(id);
+
+    if (nueva_clave && String(nueva_clave).trim().length >= 4) {
+      const hashed = await bcrypt.hash(String(nueva_clave).trim(), 10);
+      await db.query('UPDATE choferes SET clave = $1 WHERE id = $2', [hashed, safeId]);
+    }
 
     // Si viene la foto base64, la actualizamos, si no, mantenemos la existente.
     const updateQuery = `
@@ -1668,8 +1712,10 @@ app.put('/api/choferes/:id', async (req, res) => {
           vehiculo_color = $13,
           foto_url = COALESCE($14, foto_url),
           dni_foto_url = COALESCE($15, dni_foto_url),
-          vehiculo_foto_url = COALESCE($16, vehiculo_foto_url)
-      WHERE id = $17 RETURNING *
+          vehiculo_foto_url = COALESCE($16, vehiculo_foto_url),
+          carnet_foto_url = COALESCE($17, carnet_foto_url),
+          tipo_chofer = $18
+      WHERE id = $19 RETURNING *
     `;
     const values = [
       nombre, 
@@ -1687,13 +1733,17 @@ app.put('/api/choferes/:id', async (req, res) => {
       vehiculo_color || null, 
       foto_perfil_base64 || null, 
       foto_dni_base64 || null, 
-      foto_auto_base64 || null, 
+      foto_auto_base64 || null,
+      foto_carnet_base64 || null,
+      safeTipoChofer,
       safeId
     ];
 
     const result = await db.query(updateQuery, values);
     if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Chofer no encontrado' });
-    res.json({ success: true, chofer: result.rows[0] });
+    const updatedChofer = { ...result.rows[0] };
+    delete updatedChofer.clave;
+    res.json({ success: true, chofer: updatedChofer });
   } catch (error) {
     console.error('Error actualizando chofer:', error);
     res.status(500).json({ success: false, error: error.message || 'Error del servidor' });

@@ -2,6 +2,19 @@ import React, { useState } from 'react';
 import { UserPlus, Car, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+const PROD_API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
+const LOCAL_API_URL = 'http://localhost:3000';
+const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'));
+const API_BASE = isLocalHost ? LOCAL_API_URL : PROD_API_URL;
+
+async function apiFetch(path, options = {}) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, options);
+    if (res.ok) return res;
+  } catch (e) {}
+  return fetch(`${PROD_API_URL}${path}`, options);
+}
+
 export default function NewUser() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -14,6 +27,7 @@ export default function NewUser() {
     fecha_nacimiento: '',
     licencia_vencimiento: '',
     numero_movil: '',
+    tipo_chofer: 'Titular',
     vehiculo_modelo: '',
     vehiculo_color: '',
     vehiculo_patente: '',
@@ -50,7 +64,7 @@ export default function NewUser() {
     }
     setLoading(true);
     try {
-      const res = await fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes/register', {
+      const res = await apiFetch('/api/choferes/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -58,7 +72,7 @@ export default function NewUser() {
       const data = await res.json();
       if (data.success) {
         alert('Chofer registrado con éxito');
-        navigate('/'); // Redirige a la gestión de choferes en lugar de recargar la página
+        navigate('/choferes');
       } else {
         alert('Error: ' + data.error);
       }
@@ -135,13 +149,6 @@ export default function NewUser() {
                   <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'foto_carnet_base64')} />
                 </div>
               </div>
-              <div className="form-group file-upload">
-                <label>Foto Frente DNI</label>
-                <div className="upload-box">
-                  <Upload size={16} /> {formData.foto_dni_base64 ? 'Imagen Seleccionada' : 'Subir Imagen'}
-                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'foto_dni_base64')} />
-                </div>
-              </div>
             </div>
           </div>
 
@@ -151,6 +158,30 @@ export default function NewUser() {
               <div className="form-group">
                 <label>Número de Móvil Asignado</label>
                 <input type="number" name="numero_movil" value={formData.numero_movil} onChange={handleChange} required />
+              </div>
+              <div className="form-group">
+                <label>Rol en el Móvil (Titular / Chofer)</label>
+                <select
+                  name="tipo_chofer"
+                  value={formData.tipo_chofer}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    backgroundColor: '#1e293b',
+                    color: '#f8fafc',
+                    border: '1px solid #334155',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="Titular">Titular</option>
+                  <option value="Chofer 1">Chofer 1</option>
+                  <option value="Chofer 2">Chofer 2</option>
+                  <option value="Chofer 3">Chofer 3</option>
+                </select>
               </div>
               <div className="form-group">
                 <label>Datos de Cobro (CBU/Alias/MercadoPago)</label>
