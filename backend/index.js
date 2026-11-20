@@ -628,10 +628,10 @@ app.post('/api/choferes/register', async (req, res) => {
 
 // Login de Chofer
 app.post('/api/choferes/login', async (req, res) => {
-  const { dni, clave } = req.body;
+  const { dni, clave, lat, lng } = req.body;
   try {
     const result = await db.query(
-      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado, foto_url, suspendido FROM choferes WHERE dni = $1',
+      'SELECT id, nombre, apellido, dni, clave, numero_movil, vehiculo_modelo, vehiculo_patente, estado, foto_url, suspendido, lat, lng FROM choferes WHERE dni = $1',
       [dni]
     );
     
@@ -642,11 +642,23 @@ app.post('/api/choferes/login', async (req, res) => {
         if (chofer.suspendido) {
           return res.json({ success: false, error: 'suspended' });
         }
-        // Al iniciar sesión, el chofer entra automáticamente como LIBRE
-        await db.query(
-          "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
-          [chofer.id]
-        );
+
+        const hasValidCoords = lat != null && lng != null && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng));
+        if (hasValidCoords) {
+          const parsedLat = parseFloat(lat);
+          const parsedLng = parseFloat(lng);
+          await db.query(
+            "UPDATE choferes SET estado = 'libre', is_online = true, lat = $1, lng = $2 WHERE id = $3",
+            [parsedLat, parsedLng, chofer.id]
+          );
+          chofer.lat = parsedLat;
+          chofer.lng = parsedLng;
+        } else {
+          await db.query(
+            "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
+            [chofer.id]
+          );
+        }
         chofer.estado = 'libre';
         chofer.is_online = true;
 
@@ -658,6 +670,19 @@ app.post('/api/choferes/login', async (req, res) => {
           isOnline: true,
           origen: 'auto_login'
         });
+
+        if (hasValidCoords) {
+          io.emit('driver_location', {
+            chofer_id: chofer.id,
+            dni: chofer.dni,
+            movil: chofer.numero_movil,
+            lat: chofer.lat,
+            lng: chofer.lng,
+            isOnline: true,
+            estado: 'libre',
+            foto_url: chofer.foto_url || null
+          });
+        }
 
         // Eliminar la clave antes de enviarlo al cliente
         delete chofer.clave;
@@ -1487,26 +1512,35 @@ io.on('connection', (socket) => {
 
     connectedDrivers[socket.id] = data.chofer_id;
 
-    // 1. Emitir a todos (Operador y otros) al instante
-    socket.broadcast.emit('driver_location', data);
+    // 1. Emitir a todos (Operador y otros) al instante solo si trae coordenadas reales o si ya tiene ubicación
+    const hasCoords = data.lat != null && data.lng != null && !isNaN(parseFloat(data.lat)) && !isNaN(parseFloat(data.lng));
+    const safeLat = hasCoords ? parseFloat(data.lat) : null;
+    const safeLng = hasCoords ? parseFloat(data.lng) : null;
+
+    if (hasCoords) {
+      socket.broadcast.emit('driver_location', {
+        ...data,
+        lat: safeLat,
+        lng: safeLng
+      });
+    }
     
-    // 2. Persistir en la base de datos respetando estado automático (libre vs ocupado)
+    // 2. Persistir en la base de datos respetando estado automático (libre vs ocupado) y sin pisar GPS real con coordenadas vacías
     try {
       if (data.estado === 'ocupado') {
         await db.query(
-          "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = 'ocupado' WHERE id = $3 OR dni = $4",
-          [data.lat, data.lng, data.chofer_id, data.dni]
+          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = 'ocupado' WHERE id = $3 OR dni = $4",
+          [safeLat, safeLng, data.chofer_id, data.dni]
         );
       } else if (data.isOnline) {
         await db.query(
-          "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = 'libre' WHERE id = $3 OR dni = $4",
-          [data.lat, data.lng, data.chofer_id, data.dni]
+          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = 'libre' WHERE id = $3 OR dni = $4",
+          [safeLat, safeLng, data.chofer_id, data.dni]
         );
       } else {
-        // Si isOnline es false en el pulso, está ocupado en un viaje activo o telefónico
         await db.query(
-          "UPDATE choferes SET lat = $1, lng = $2, is_online = true, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
-          [data.lat, data.lng, data.chofer_id, data.dni]
+          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
+          [safeLat, safeLng, data.chofer_id, data.dni]
         );
       }
     } catch (err) {

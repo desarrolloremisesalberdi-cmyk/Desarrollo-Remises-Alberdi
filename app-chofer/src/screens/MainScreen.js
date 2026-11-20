@@ -14,7 +14,7 @@ export default function MainScreen({ route, navigation }) {
   const [isOnline, setIsOnline] = useState(true);
   const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [activeTrip, setActiveTrip] = useState(null);
-  const [location, setLocation] = useState(null);
+  const [location, setLocation] = useState(() => route?.params?.initialLocation || null);
   const [socket, setSocket] = useState(null);
   const [incomingRide, setIncomingRide] = useState(null);
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
@@ -75,7 +75,7 @@ export default function MainScreen({ route, navigation }) {
 
     newSocket.on('connect', () => {
       console.log('Socket chofer conectado');
-      if (chofer) {
+      if (chofer && locationRef.current) {
         const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         newSocket.emit('update_location', {
           chofer_id: chofer.id || chofer.dni,
@@ -83,8 +83,8 @@ export default function MainScreen({ route, navigation }) {
           movil: chofer.numero_movil,
           isOnline: !ocupado,
           estado: ocupado ? 'ocupado' : 'libre',
-          lat: locationRef.current ? locationRef.current.latitude : -33.044167,
-          lng: locationRef.current ? locationRef.current.longitude : -61.168056,
+          lat: locationRef.current.latitude,
+          lng: locationRef.current.longitude,
           foto_url: chofer.foto_url || null
         });
       }
@@ -239,7 +239,7 @@ export default function MainScreen({ route, navigation }) {
       if (nextAppState === 'active') {
         if (socket) {
           if (!socket.connected) socket.connect();
-          if (chofer) {
+          if (chofer && locationRef.current) {
             const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
             socket.emit('update_location', {
               chofer_id: chofer.id || chofer.dni,
@@ -247,8 +247,8 @@ export default function MainScreen({ route, navigation }) {
               movil: chofer.numero_movil,
               isOnline: !ocupado,
               estado: ocupado ? 'ocupado' : 'libre',
-              lat: locationRef.current ? locationRef.current.latitude : -33.044167,
-              lng: locationRef.current ? locationRef.current.longitude : -61.168056,
+              lat: locationRef.current.latitude,
+              lng: locationRef.current.longitude,
               foto_url: chofer.foto_url || null
             });
           }
@@ -258,11 +258,11 @@ export default function MainScreen({ route, navigation }) {
     return () => sub.remove();
   }, [socket, chofer]);
 
-  // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket y la posición
+  // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket y la posición real
   useEffect(() => {
     if (!isOnline && !activeTrip && !viajeTelefonicoActivo) return;
     const heartbeat = setInterval(() => {
-      if (socket && chofer) {
+      if (socket && chofer && locationRef.current) {
         const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         socket.emit('update_location', {
           chofer_id: chofer.id || chofer.dni,
@@ -270,8 +270,8 @@ export default function MainScreen({ route, navigation }) {
           movil: chofer.numero_movil,
           isOnline: !ocupado,
           estado: ocupado ? 'ocupado' : 'libre',
-          lat: locationRef.current ? locationRef.current.latitude : -33.044167,
-          lng: locationRef.current ? locationRef.current.longitude : -61.168056,
+          lat: locationRef.current.latitude,
+          lng: locationRef.current.longitude,
           foto_url: chofer.foto_url || null
         });
       }
@@ -279,21 +279,31 @@ export default function MainScreen({ route, navigation }) {
     return () => clearInterval(heartbeat);
   }, [socket, chofer, isOnline, activeTrip, viajeTelefonicoActivo]);
 
-  // Obtener ubicación inicial inmediatamente al cargar la pantalla
+  // Obtener ubicación real de alta precisión inmediatamente al cargar la pantalla
   useEffect(() => {
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          let currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          let currentLoc = null;
+          try {
+            currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+          } catch (e) {
+            currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          }
           if (currentLoc && currentLoc.coords) {
-            setLocation(currentLoc.coords);
+            const coords = {
+              latitude: currentLoc.coords.latitude,
+              longitude: currentLoc.coords.longitude,
+            };
+            locationRef.current = coords;
+            setLocation(coords);
             if (mapRef.current) {
               mapRef.current.animateToRegion({
-                latitude: currentLoc.coords.latitude,
-                longitude: currentLoc.coords.longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                latitudeDelta: 0.015,
+                longitudeDelta: 0.015,
               }, 800);
             }
           }
@@ -317,30 +327,54 @@ export default function MainScreen({ route, navigation }) {
 
         const ocupadoActual = Boolean(activeTrip || viajeTelefonicoActivo);
 
-        // Enviar pulso inmediato con el estado real (libre vs ocupado)
-        if (socket && chofer) {
+        // Si aún no tenemos fix de GPS, lo obtenemos primero antes de emitir para NUNCA enviar una ubicación falsa
+        let realCoords = locationRef.current;
+        if (!realCoords) {
+          try {
+            const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            if (fix && fix.coords) {
+              realCoords = { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
+              locationRef.current = realCoords;
+              setLocation(realCoords);
+            }
+          } catch (e) {
+            try {
+              const lastFix = await Location.getLastKnownPositionAsync();
+              if (lastFix && lastFix.coords) {
+                realCoords = { latitude: lastFix.coords.latitude, longitude: lastFix.coords.longitude };
+                locationRef.current = realCoords;
+                setLocation(realCoords);
+              }
+            } catch (err) {}
+          }
+        }
+
+        // Enviar pulso con la ubicación GPS real del teléfono
+        if (socket && chofer && realCoords) {
           socket.emit('update_location', {
             chofer_id: chofer.id,
             dni: chofer.dni,
             movil: chofer.numero_movil,
             isOnline: !ocupadoActual,
             estado: ocupadoActual ? 'ocupado' : 'libre',
-            lat: location ? location.latitude : -33.044167,
-            lng: location ? location.longitude : -61.168056,
+            lat: realCoords.latitude,
+            lng: realCoords.longitude,
             foto_url: chofer.foto_url || null
           });
         }
 
         subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
+            accuracy: Location.Accuracy.Highest,
             timeInterval: 3000,
-            distanceInterval: 10,
+            distanceInterval: 5,
             showsBackgroundLocationIndicator: true
           },
           (loc) => {
             const { latitude, longitude } = loc.coords;
-            setLocation({ latitude, longitude });
+            const updatedCoords = { latitude, longitude };
+            locationRef.current = updatedCoords;
+            setLocation(updatedCoords);
             if (mapRef.current) {
               mapRef.current.animateToRegion({
                 latitude,
@@ -375,8 +409,8 @@ export default function MainScreen({ route, navigation }) {
             movil: chofer.numero_movil,
             isOnline: false,
             estado: 'inactivo',
-            lat: location ? location.latitude : -33.044167,
-            lng: location ? location.longitude : -61.168056,
+            lat: locationRef.current ? locationRef.current.latitude : null,
+            lng: locationRef.current ? locationRef.current.longitude : null,
             foto_url: chofer.foto_url || null
           });
         }
@@ -629,14 +663,18 @@ export default function MainScreen({ route, navigation }) {
 
     if (socket) {
       socket.emit('operator_set_driver_status', updatePayload);
-      socket.emit('update_location', {
-        chofer_id: chofer.id,
-        dni: chofer.dni,
-        isOnline: true,
-        lat: location ? location.latitude : -33.044167,
-        lng: location ? location.longitude : -61.168056,
-        foto_url: chofer.foto_url || null
-      });
+      if (locationRef.current) {
+        socket.emit('update_location', {
+          chofer_id: chofer.id,
+          dni: chofer.dni,
+          movil: chofer.numero_movil,
+          isOnline: true,
+          estado: 'libre',
+          lat: locationRef.current.latitude,
+          lng: locationRef.current.longitude,
+          foto_url: chofer.foto_url || null
+        });
+      }
     }
 
     try {

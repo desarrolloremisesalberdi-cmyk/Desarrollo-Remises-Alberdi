@@ -11,7 +11,7 @@ export default function MainScreen({ route, navigation }) {
   const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
-  const [location, setLocation] = useState(null);
+  const [location, setLocation] = useState(() => route?.params?.initialLocation || null);
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
   const [recaudacionHoy, setRecaudacionHoy] = useState(0);
   const [enEspera, setEnEspera] = useState(false);
@@ -57,14 +57,14 @@ export default function MainScreen({ route, navigation }) {
     // Al reconectar socket (por pérdida temporal de señal o suspensión)
     socket.on('connect', () => {
       console.log('Socket chofer conectado en Web');
-      if (chofer) {
+      if (chofer && locationRef.current) {
         const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         socket.emit('update_location', {
           chofer_id: chofer.id || 'sim-1',
           dni: chofer.dni || '31861718',
           movil: chofer.numero_movil || '14',
-          lat: locationRef.current ? locationRef.current.latitude : -33.045,
-          lng: locationRef.current ? locationRef.current.longitude : -61.168,
+          lat: locationRef.current.latitude,
+          lng: locationRef.current.longitude,
           isOnline: !ocupado,
           estado: ocupado ? 'ocupado' : 'libre',
           foto_url: chofer.foto_url || null
@@ -139,14 +139,14 @@ export default function MainScreen({ route, navigation }) {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         if (!socket.connected) socket.connect();
-        if (chofer) {
+        if (chofer && locationRef.current) {
           const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
           socket.emit('update_location', {
             chofer_id: chofer.id || 'sim-1',
             dni: chofer.dni || '31861718',
             movil: chofer.numero_movil || '14',
-            lat: locationRef.current ? locationRef.current.latitude : -33.045,
-            lng: locationRef.current ? locationRef.current.longitude : -61.168,
+            lat: locationRef.current.latitude,
+            lng: locationRef.current.longitude,
             isOnline: !ocupado,
             estado: ocupado ? 'ocupado' : 'libre',
             foto_url: chofer.foto_url || null
@@ -158,18 +158,18 @@ export default function MainScreen({ route, navigation }) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [chofer]);
 
-  // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket y evitar desconexión
+  // Heartbeat periódico (cada 12 segundos) para mantener vivo el socket con la ubicación real
   useEffect(() => {
     if (!isOnline && !activeTrip && !viajeTelefonicoActivo) return;
     const heartbeat = setInterval(() => {
-      if (chofer) {
+      if (chofer && locationRef.current) {
         const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
         socket.emit('update_location', {
           chofer_id: chofer.id || 'sim-1',
           dni: chofer.dni || '31861718',
           movil: chofer.numero_movil || '14',
-          lat: locationRef.current ? locationRef.current.latitude : -33.045,
-          lng: locationRef.current ? locationRef.current.longitude : -61.168,
+          lat: locationRef.current.latitude,
+          lng: locationRef.current.longitude,
           isOnline: !ocupado,
           estado: ocupado ? 'ocupado' : 'libre',
           foto_url: chofer.foto_url || null
@@ -184,23 +184,52 @@ export default function MainScreen({ route, navigation }) {
 
     if (isOnline || activeTrip || viajeTelefonicoActivo) {
       const ocupadoActual = Boolean(activeTrip || viajeTelefonicoActivo);
-      // Send immediate update so operator sees the change instantly without waiting for GPS
-      socket.emit('update_location', {
-        chofer_id: chofer.id || 'sim-1',
-        dni: chofer.dni || '31861718',
-        movil: chofer.numero_movil || '14',
-        lat: location ? location.latitude : -33.045,
-        lng: location ? location.longitude : -61.168,
-        isOnline: !ocupadoActual,
-        estado: ocupadoActual ? 'ocupado' : 'libre',
-        foto_url: chofer.foto_url || null
-      });
+
+      // Si ya vino ubicación real del login, emitirla enseguida
+      if (locationRef.current) {
+        socket.emit('update_location', {
+          chofer_id: chofer.id || 'sim-1',
+          dni: chofer.dni || '31861718',
+          movil: chofer.numero_movil || '14',
+          lat: locationRef.current.latitude,
+          lng: locationRef.current.longitude,
+          isOnline: !ocupadoActual,
+          estado: ocupadoActual ? 'ocupado' : 'libre',
+          foto_url: chofer.foto_url || null
+        });
+      }
 
       if ('geolocation' in navigator) {
+        // 1. Obtener posición exacta inmediatamente con alta precisión (GPS real)
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            const coords = { latitude, longitude };
+            locationRef.current = coords;
+            setLocation(coords);
+            const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
+            socket.emit('update_location', {
+              chofer_id: chofer.id || 'sim-1',
+              dni: chofer.dni || '31861718',
+              movil: chofer.numero_movil || '14',
+              lat: latitude,
+              lng: longitude,
+              isOnline: !ocupado,
+              estado: ocupado ? 'ocupado' : 'libre',
+              foto_url: chofer.foto_url || null
+            });
+          },
+          (err) => console.warn('Error en getCurrentPosition inicial:', err),
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+
+        // 2. Mantener seguimiento continuo con alta precisión
         watchId = navigator.geolocation.watchPosition(
           (position) => {
             const { latitude, longitude } = position.coords;
-            setLocation({ latitude, longitude });
+            const coords = { latitude, longitude };
+            locationRef.current = coords;
+            setLocation(coords);
             const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
             socket.emit('update_location', {
               chofer_id: chofer.id || 'sim-1',
@@ -219,7 +248,7 @@ export default function MainScreen({ route, navigation }) {
               alert('Permiso de GPS denegado. Actívalo en tu navegador para trabajar.');
             }
           },
-          { enableHighAccuracy: false, maximumAge: 5000, timeout: 15000 }
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
         );
       } else {
         alert("Tu navegador no soporta GPS.");
@@ -229,8 +258,8 @@ export default function MainScreen({ route, navigation }) {
         chofer_id: chofer.id || 'sim-1',
         dni: chofer.dni || '31861718',
         movil: chofer.numero_movil || '14',
-        lat: location ? location.latitude : -33.045,
-        lng: location ? location.longitude : -61.168,
+        lat: locationRef.current ? locationRef.current.latitude : null,
+        lng: locationRef.current ? locationRef.current.longitude : null,
         isOnline: false,
         estado: 'inactivo'
       });
@@ -492,15 +521,18 @@ export default function MainScreen({ route, navigation }) {
 
     // Notificar al operador e inversores por Socket y API
     socket.emit('operator_set_driver_status', updatePayload);
-    socket.emit('update_location', {
-      chofer_id: chofer.id || 'sim-1',
-      dni: chofer.dni || '31861718',
-      movil: chofer.numero_movil || '14',
-      lat: location ? location.latitude : -33.045,
-      lng: location ? location.longitude : -61.168,
-      isOnline: true,
-      foto_url: chofer.foto_url || null
-    });
+    if (locationRef.current) {
+      socket.emit('update_location', {
+        chofer_id: chofer.id || 'sim-1',
+        dni: chofer.dni || '31861718',
+        movil: chofer.numero_movil || '14',
+        lat: locationRef.current.latitude,
+        lng: locationRef.current.longitude,
+        isOnline: true,
+        estado: 'libre',
+        foto_url: chofer.foto_url || null
+      });
+    }
 
     try {
       await fetch(`${API_URL}/api/choferes/set-status`, {
@@ -540,7 +572,7 @@ export default function MainScreen({ route, navigation }) {
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
         <iframe 
           title="Mapa de Casilda"
-          src={`https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=-33.044167,-61.168056&zoom=14&maptype=roadmap`}
+          src={`https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&zoom=${location ? 16 : 14}&maptype=roadmap`}
           style={{ width: '100%', height: '100%', border: 0 }}
         />
       </View>

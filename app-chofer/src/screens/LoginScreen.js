@@ -1,13 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Switch, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Switch, Image, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
+
+async function obtenerUbicacionRealAlLoguear() {
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+        return await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 6000 }
+          );
+        });
+      }
+      return null;
+    }
+
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+
+    try {
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      if (current?.coords) {
+        return {
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        };
+      }
+    } catch (e) {
+      const last = await Location.getLastKnownPositionAsync();
+      if (last?.coords) {
+        return {
+          latitude: last.coords.latitude,
+          longitude: last.coords.longitude,
+        };
+      }
+    }
+  } catch (err) {
+    console.log('No se pudo obtener GPS previo al login:', err);
+  }
+  return null;
+}
 
 export default function LoginScreen({ navigation }) {
   const [dni, setDni] = useState('');
   const [clave, setClave] = useState('');
   const [recordar, setRecordar] = useState(false);
+  const [cargandoLogin, setCargandoLogin] = useState(false);
 
   const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -41,28 +86,46 @@ export default function LoginScreen({ navigation }) {
       alert('Por favor ingresá tu DNI y Clave');
       return;
     }
-    
+
+    setCargandoLogin(true);
     try {
+      // 1. Obtener coordenadas GPS reales del teléfono antes de registrar la sesión en el mapa
+      const gpsCoords = await obtenerUbicacionRealAlLoguear();
+
       const response = await fetch(`${API_URL}/api/choferes/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dni, clave })
+        body: JSON.stringify({
+          dni: dni.trim(),
+          clave,
+          lat: gpsCoords ? gpsCoords.latitude : undefined,
+          lng: gpsCoords ? gpsCoords.longitude : undefined,
+        })
       });
       const data = await response.json();
       
       if (data.success) {
         if (recordar) {
-          await AsyncStorage.setItem('chofer_dni', dni);
+          await AsyncStorage.setItem('chofer_dni', dni.trim());
           await AsyncStorage.setItem('chofer_clave', clave);
         } else {
           await AsyncStorage.removeItem('chofer_dni');
           await AsyncStorage.removeItem('chofer_clave');
         }
 
+        const choferConGps = {
+          ...data.chofer,
+          lat: gpsCoords ? gpsCoords.latitude : data.chofer.lat,
+          lng: gpsCoords ? gpsCoords.longitude : data.chofer.lng,
+        };
+
         if (Platform.OS === 'web') {
-          localStorage.setItem('chofer_user', JSON.stringify(data.chofer));
+          localStorage.setItem('chofer_user', JSON.stringify(choferConGps));
         }
-        navigation.replace('Main', { chofer: data.chofer });
+        navigation.replace('Main', {
+          chofer: choferConGps,
+          initialLocation: gpsCoords || null,
+        });
       } else {
         if (data.error === 'suspended') {
           alert('Usuario bloqueado. Comuniquese con el operador.');
@@ -72,6 +135,8 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (error) {
       alert('Error al conectar con el servidor');
+    } finally {
+      setCargandoLogin(false);
     }
   };
 
@@ -121,10 +186,18 @@ export default function LoginScreen({ navigation }) {
         </View>
 
         <TouchableOpacity 
-          style={[styles.button, { backgroundColor: '#10b981' }]}
+          style={[styles.button, { backgroundColor: '#10b981', opacity: cargandoLogin ? 0.8 : 1 }]}
           onPress={handleLogin}
+          disabled={cargandoLogin}
         >
-          <Text style={styles.buttonText}>⚡ Entrar a Trabajar</Text>
+          {cargandoLogin ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text style={styles.buttonText}>Obteniendo GPS e Iniciando...</Text>
+            </View>
+          ) : (
+            <Text style={styles.buttonText}>⚡ Entrar a Trabajar</Text>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>
