@@ -162,11 +162,17 @@ function DashboardMap() {
     }
   };
 
-  // Calcular totales reales (asegurando que ningún chofer conectado quede sin categoría)
+  const hasValidCoords = (d) =>
+    d && d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng));
+
+  // Calcular totales reales (100% consistentes con los móviles visibles en el mapa)
   const driversList = Object.values(activeDrivers);
-  const autosLibres = driversList.filter(d => d.isOnline && (!d.estado || d.estado === 'libre')).length;
-  const autosOcupados = driversList.filter(d => d.isOnline && (d.estado === 'ocupado' || d.estado === 'inactivo')).length;
-  const autosDesconectados = driversList.filter(d => !d.isOnline).length;
+  const autosLibres = driversList.filter(d => d.isOnline && d.estado === 'libre' && hasValidCoords(d)).length;
+  const autosOcupados = driversList.filter(d => d.isOnline && d.estado === 'ocupado' && hasValidCoords(d)).length;
+  const autosDesconectados = driversList.filter(d => !d.isOnline || d.estado === 'inactivo' || !hasValidCoords(d)).length;
+
+  // Filtrar choferes activos que deben dibujarse en el mapa
+  const visibleDrivers = driversList.filter(d => hasValidCoords(d) && d.isOnline && (d.estado === 'libre' || d.estado === 'ocupado'));
 
   return (
     <main className="content">
@@ -180,43 +186,63 @@ function DashboardMap() {
             url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
             attribution='&copy; <a href="https://www.google.com/intl/en-US_US/help/terms_maps.html">Google Maps</a>'
           />
-          {driversList.filter(d => d.lat != null && d.lng != null && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng)) && d.isOnline).map(driver => {
+          {visibleDrivers.map((driver, idx) => {
             const isLibre = driver.estado === 'libre';
-            const isOcupado = driver.estado === 'ocupado' || driver.estado === 'inactivo';
-            
-            let borderColor = '#9ca3af'; // Gris (Por defecto)
-            let statusText = 'Desconocido';
-            
-            if (isLibre) {
-              borderColor = '#10b981'; // Verde (Libre)
-              statusText = 'Auto Libre (Verde)';
-            } else if (isOcupado) {
-              borderColor = '#ef4444'; // Rojo (Ocupado / Inactivo)
-              statusText = 'Auto Ocupado/Inactivo (Rojo)';
+            const borderColor = isLibre ? '#10b981' : '#ef4444';
+            const statusText = isLibre ? 'Auto Libre (Verde)' : 'Auto Ocupado (Rojo)';
+
+            // Si hay otro móvil en exactamente la misma coordenada (< 20m), desplazar levemente el marcador para que no se tapen
+            const baseLat = parseFloat(driver.lat);
+            const baseLng = parseFloat(driver.lng);
+            const overlappingGroup = visibleDrivers.filter(
+              other => Math.abs(parseFloat(other.lat) - baseLat) < 0.0002 && Math.abs(parseFloat(other.lng) - baseLng) < 0.0002
+            );
+            let displayLat = baseLat;
+            let displayLng = baseLng;
+            if (overlappingGroup.length > 1) {
+              const posInGroup = overlappingGroup.findIndex(o => String(o.chofer_id) === String(driver.chofer_id));
+              const angle = (posInGroup * (2 * Math.PI)) / overlappingGroup.length;
+              displayLat = baseLat + Math.sin(angle) * 0.00032;
+              displayLng = baseLng + Math.cos(angle) * 0.00032;
             }
 
-            const imageUrl = driver.foto_url || `https://ui-avatars.com/api/?name=C&background=333&color=fff`;
+            const imageUrl = driver.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(driver.movil || 'M')}&background=1e293b&color=fff`;
             const iconHtml = `
-              <div style="
-                width: 40px; 
-                height: 40px; 
-                border-radius: 50%; 
-                border: 3px solid ${borderColor}; 
-                background-image: url('${imageUrl}'); 
-                background-size: cover; 
-                background-position: center;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-              "></div>
+              <div style="position: relative; width: 44px; height: 44px;">
+                <div style="
+                  width: 40px; 
+                  height: 40px; 
+                  border-radius: 50%; 
+                  border: 3px solid ${borderColor}; 
+                  background-image: url('${imageUrl}'); 
+                  background-size: cover; 
+                  background-position: center;
+                  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+                "></div>
+                <span style="
+                  position: absolute;
+                  bottom: -2px;
+                  right: -4px;
+                  background: ${borderColor};
+                  color: #fff;
+                  font-size: 10px;
+                  font-weight: 900;
+                  padding: 1px 5px;
+                  border-radius: 8px;
+                  border: 1.5px solid #0f172a;
+                  line-height: 12px;
+                ">#${driver.movil || '?'}</span>
+              </div>
             `;
             const customIcon = L.divIcon({
               className: 'custom-driver-icon',
               html: iconHtml,
-              iconSize: [40, 40],
-              iconAnchor: [20, 20]
+              iconSize: [44, 44],
+              iconAnchor: [22, 22]
             });
 
             return (
-              <Marker key={driver.chofer_id} position={[driver.lat, driver.lng]} icon={customIcon}>
+              <Marker key={driver.chofer_id || idx} position={[displayLat, displayLng]} icon={customIcon}>
                 <Popup>
                   <div style={{ textAlign: 'center', minWidth: '170px' }}>
                     <img src={imageUrl} alt="Chofer" style={{ width: 60, height: 60, borderRadius: '50%', marginBottom: 5 }} />
