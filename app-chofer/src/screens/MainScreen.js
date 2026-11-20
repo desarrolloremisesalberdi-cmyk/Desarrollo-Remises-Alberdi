@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image, Dimensions, Vibration, ActivityIndicator, Modal } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppState, Image, Dimensions, Vibration, ActivityIndicator, Modal, Linking, Platform } from 'react-native';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { io } from 'socket.io-client';
+import { obtenerRutaGuiada, calcularEstadoNavegacionEnVivo, formatearDistancia } from '../utils/guidedNavigation';
 
 const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
@@ -29,6 +30,28 @@ export default function MainScreen({ route, navigation }) {
   const [comprobanteAprobado, setComprobanteAprobado] = useState(false);
   const [validandoComprobante, setValidandoComprobante] = useState(false);
   const [modalVerComprobante, setModalVerComprobante] = useState(false);
+
+  // Estados de Navegación GPS Guiada Paso a Paso (Turn-by-Turn)
+  const [guidedRoute, setGuidedRoute] = useState(null);
+  const [navStatus, setNavStatus] = useState(null);
+  const [navStepIndex, setNavStepIndex] = useState(1);
+
+  const abrirNavegacionVozGoogleMaps = (destLat, destLng) => {
+    if (!destLat || !destLng) return;
+    const urlNative = Platform.OS === 'ios'
+      ? `comgooglemaps://?daddr=${destLat},${destLng}&directionsmode=driving`
+      : `google.navigation:q=${destLat},${destLng}&mode=d`;
+    const urlWeb = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving`;
+
+    Linking.canOpenURL(urlNative)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(urlNative);
+        }
+        return Linking.openURL(urlWeb);
+      })
+      .catch(() => Linking.openURL(urlWeb));
+  };
   
   // En React Native (sin web) simularemos un chofer si no viene por params
   const chofer = route?.params?.chofer || { id: 'sim-native', dni: 'sim' };
@@ -431,6 +454,75 @@ export default function MainScreen({ route, navigation }) {
     }
   }, [isOnline, incomingRide]);
 
+  // Calcular ruta guiada calle por calle automáticamente cuando se acepta un viaje o comienza el recorrido
+  useEffect(() => {
+    if (!activeTrip) {
+      setGuidedRoute(null);
+      setNavStatus(null);
+      setNavStepIndex(1);
+      return;
+    }
+
+    const startLat = locationRef.current ? locationRef.current.latitude : -33.044167;
+    const startLng = locationRef.current ? locationRef.current.longitude : -61.168056;
+
+    const goingToDestination =
+      activeTrip.estado === 'en_viaje' &&
+      activeTrip.destino_lat &&
+      activeTrip.destino_lng &&
+      Number(activeTrip.destino_lat) !== 0 &&
+      Number(activeTrip.destino_lng) !== 0;
+
+    const targetLat = goingToDestination ? Number(activeTrip.destino_lat) : Number(activeTrip.origen_lat);
+    const targetLng = goingToDestination ? Number(activeTrip.destino_lng) : Number(activeTrip.origen_lng);
+    const targetLabel = goingToDestination
+      ? 'el destino del pasajero'
+      : (activeTrip.origen_direccion ? activeTrip.origen_direccion : 'la ubicación del pasajero');
+
+    if (!targetLat || !targetLng || isNaN(targetLat) || isNaN(targetLng)) return;
+
+    let cancelled = false;
+    (async () => {
+      const ruta = await obtenerRutaGuiada(startLat, startLng, targetLat, targetLng, targetLabel);
+      if (!cancelled && ruta) {
+        setGuidedRoute(ruta);
+        setNavStepIndex(1);
+        const estadoInicial = calcularEstadoNavegacionEnVivo(ruta, startLat, startLng, 1);
+        setNavStatus(estadoInicial);
+
+        if (mapRef.current && ruta.coordinates && ruta.coordinates.length >= 2) {
+          try {
+            mapRef.current.fitToCoordinates(ruta.coordinates, {
+              edgePadding: { top: 140, right: 50, bottom: 260, left: 50 },
+              animated: true,
+            });
+          } catch (e) {}
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTrip?.id, activeTrip?.estado]);
+
+  // Actualizar las indicaciones ("En 200 m gire a la derecha...") en tiempo real a medida que el chofer avanza con el GPS
+  useEffect(() => {
+    if (!guidedRoute || !location) return;
+    const nuevoEstado = calcularEstadoNavegacionEnVivo(
+      guidedRoute,
+      location.latitude,
+      location.longitude,
+      navStepIndex
+    );
+    if (nuevoEstado) {
+      if (nuevoEstado.stepIndex !== navStepIndex) {
+        setNavStepIndex(nuevoEstado.stepIndex);
+      }
+      setNavStatus(nuevoEstado);
+    }
+  }, [location?.latitude, location?.longitude, guidedRoute]);
+
   const responderComprobante = async (estado) => {
     if (!activeTrip) return;
     setValidandoComprobante(true);
@@ -734,10 +826,10 @@ export default function MainScreen({ route, navigation }) {
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={{
-          latitude: -33.044167, 
-          longitude: -61.168056,
-          latitudeDelta: 0.04,
-          longitudeDelta: 0.04,
+          latitude: location ? location.latitude : -33.044167, 
+          longitude: location ? location.longitude : -61.168056,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
         }}
         showsUserLocation={true}
         showsMyLocationButton={false}
@@ -748,6 +840,37 @@ export default function MainScreen({ route, navigation }) {
             coordinate={{ latitude: location.latitude, longitude: location.longitude }}
             title="Mi Taxi Alberdi"
             description={`Móvil #${chofer.numero_movil || '14'}`}
+          />
+        )}
+
+        {activeTrip && activeTrip.origen_lat && activeTrip.origen_lng && (
+          <Marker
+            coordinate={{
+              latitude: Number(activeTrip.origen_lat),
+              longitude: Number(activeTrip.origen_lng),
+            }}
+            pinColor="#10b981"
+            title="📍 Pasajero esperando aquí"
+            description={activeTrip.origen_direccion || activeTrip.pasajero_nombre || 'Punto de partida'}
+          />
+        )}
+
+        {activeTrip && activeTrip.destino_lat && activeTrip.destino_lng && Number(activeTrip.destino_lat) !== 0 && (
+          <Marker
+            coordinate={{
+              latitude: Number(activeTrip.destino_lat),
+              longitude: Number(activeTrip.destino_lng),
+            }}
+            pinColor="#ef4444"
+            title="🏁 Destino del Viaje"
+          />
+        )}
+
+        {guidedRoute && guidedRoute.coordinates && guidedRoute.coordinates.length >= 2 && (
+          <Polyline
+            coordinates={guidedRoute.coordinates}
+            strokeColor="#38bdf8"
+            strokeWidth={5}
           />
         )}
       </MapView>
@@ -824,36 +947,114 @@ export default function MainScreen({ route, navigation }) {
         </View>
       )}
       
-      {/* HUD Superior de Estado Automático del Chofer (Glassmorphism) */}
-      <View style={[
-        styles.header, 
-        { 
-          backgroundColor: 'rgba(15, 23, 42, 0.94)', 
-          borderColor: viajeTelefonicoActivo 
-            ? '#f59e0b' 
-            : (activeTrip ? '#ef4444' : '#10b981'),
-          shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
-          shadowOpacity: 0.35,
-          shadowRadius: 10,
-          elevation: 8,
-        }
-      ]}>
+      {/* Banner Superior de Navegación GPS Guiada Paso a Paso (cuando hay viaje activo) o HUD de Estado */}
+      {activeTrip && navStatus ? (
+        <View style={{
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          right: 12,
+          backgroundColor: '#065f46',
+          borderRadius: 18,
+          borderWidth: 2,
+          borderColor: '#10b981',
+          padding: 14,
+          zIndex: 120,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.5,
+          shadowRadius: 12,
+          elevation: 12,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 54,
+              height: 54,
+              borderRadius: 14,
+              backgroundColor: 'rgba(6, 78, 59, 0.9)',
+              borderWidth: 1.5,
+              borderColor: '#34d399',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 26, color: '#fff', fontWeight: '900' }}>{navStatus.icon}</Text>
+              <Text style={{ fontSize: 10, color: '#a7f3d0', fontWeight: '800' }}>
+                {formatearDistancia(navStatus.distToNextTurnMeters)}
+              </Text>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#ecfdf5', fontSize: 16, fontWeight: '900', lineHeight: 20 }}>
+                {navStatus.mainInstruction}
+              </Text>
+              <Text style={{ color: '#a7f3d0', fontSize: 12, fontWeight: '600', marginTop: 3 }} numberOfLines={2}>
+                {navStatus.subInstruction}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{
+            marginTop: 10,
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(167, 243, 208, 0.25)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <Text style={{ color: '#d1fae5', fontSize: 12, fontWeight: '800' }}>
+              📍 Falta: {formatearDistancia(navStatus.remainingTotalMeters)} • ⏱️ ~{navStatus.etaMinutes} min
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => abrirNavegacionVozGoogleMaps(guidedRoute?.destinoLat, guidedRoute?.destinoLng)}
+              style={{
+                backgroundColor: '#0284c7',
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#38bdf8',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>🧭 Abrir Voz GPS</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
         <View style={[
-          styles.statusIndicator, 
+          styles.header, 
           { 
-            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
+            backgroundColor: 'rgba(15, 23, 42, 0.94)', 
+            borderColor: viajeTelefonicoActivo 
+              ? '#f59e0b' 
+              : (activeTrip ? '#ef4444' : '#10b981'),
             shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
-            shadowOpacity: 0.8,
-            shadowRadius: 6,
-            elevation: 4,
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            elevation: 8,
           }
-        ]} />
-        <Text style={[styles.statusText, { color: '#f8fafc' }]}>
-          {viajeTelefonicoActivo 
-            ? 'OCUPADO • VIAJE TELEFÓNICO EN CURSO' 
-            : (activeTrip ? 'OCUPADO • EN VIAJE ACTIVO' : 'EN LÍNEA • LIBRE (AUTOMÁTICO)')}
-        </Text>
-      </View>
+        ]}>
+          <View style={[
+            styles.statusIndicator, 
+            { 
+              backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
+              shadowColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
+              shadowOpacity: 0.8,
+              shadowRadius: 6,
+              elevation: 4,
+            }
+          ]} />
+          <Text style={[styles.statusText, { color: '#f8fafc' }]}>
+            {viajeTelefonicoActivo 
+              ? 'OCUPADO • VIAJE TELEFÓNICO EN CURSO' 
+              : (activeTrip ? 'OCUPADO • EN VIAJE ACTIVO' : 'EN LÍNEA • LIBRE (AUTOMÁTICO)')}
+          </Text>
+        </View>
+      )}
 
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, paddingBottom: Math.max(insets.bottom + 20, 48) }]}>
         {/* Barra superior estilo bottom-sheet */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Alert, useColorScheme, Image } from 'react-native';
 import { io } from 'socket.io-client';
+import { obtenerRutaGuiada, calcularEstadoNavegacionEnVivo, formatearDistancia } from '../utils/guidedNavigation';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
@@ -17,6 +18,34 @@ export default function MainScreen({ route, navigation }) {
   const [enEspera, setEnEspera] = useState(false);
   const [minutosEspera, setMinutosEspera] = useState(0);
   const [esperaIntervalId, setEsperaIntervalId] = useState(null);
+
+  // Estados de Navegación GPS Guiada Paso a Paso (Turn-by-Turn + Voz)
+  const [guidedRoute, setGuidedRoute] = useState(null);
+  const [navStatus, setNavStatus] = useState(null);
+  const [navStepIndex, setNavStepIndex] = useState(1);
+  const [vozActiva, setVozActiva] = useState(true);
+  const lastSpokenStepRef = useRef(null);
+
+  const hablarIndicacion = (texto) => {
+    if (!vozActiva || !texto) return;
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new window.SpeechSynthesisUtterance(texto);
+        utter.lang = 'es-AR';
+        utter.rate = 1.02;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch (e) {}
+  };
+
+  const abrirNavegacionVozGoogleMaps = (destLat, destLng) => {
+    if (!destLat || !destLng) return;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving`;
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank');
+    }
+  };
 
   // Recibimos los datos del chofer por parámetros de navegación
   const chofer = route?.params?.chofer || { id: null, nombre: 'Prueba' };
@@ -52,6 +81,76 @@ export default function MainScreen({ route, navigation }) {
   useEffect(() => {
     cargarRecaudacionHoy();
   }, [chofer?.id]);
+
+  // Calcular ruta guiada calle por calle automáticamente cuando se acepta un viaje o comienza el recorrido
+  useEffect(() => {
+    if (!activeTrip) {
+      setGuidedRoute(null);
+      setNavStatus(null);
+      setNavStepIndex(1);
+      lastSpokenStepRef.current = null;
+      return;
+    }
+
+    const startLat = locationRef.current ? locationRef.current.latitude : -33.044167;
+    const startLng = locationRef.current ? locationRef.current.longitude : -61.168056;
+
+    const goingToDestination =
+      activeTrip.estado === 'en_viaje' &&
+      activeTrip.destino_lat &&
+      activeTrip.destino_lng &&
+      Number(activeTrip.destino_lat) !== 0 &&
+      Number(activeTrip.destino_lng) !== 0;
+
+    const targetLat = goingToDestination ? Number(activeTrip.destino_lat) : Number(activeTrip.origen_lat);
+    const targetLng = goingToDestination ? Number(activeTrip.destino_lng) : Number(activeTrip.origen_lng);
+    const targetLabel = goingToDestination
+      ? 'el destino del pasajero'
+      : (activeTrip.origen_direccion ? activeTrip.origen_direccion : 'la ubicación del pasajero');
+
+    if (!targetLat || !targetLng || isNaN(targetLat) || isNaN(targetLng)) return;
+
+    let cancelled = false;
+    (async () => {
+      const ruta = await obtenerRutaGuiada(startLat, startLng, targetLat, targetLng, targetLabel);
+      if (!cancelled && ruta) {
+        setGuidedRoute(ruta);
+        setNavStepIndex(1);
+        const estadoInicial = calcularEstadoNavegacionEnVivo(ruta, startLat, startLng, 1);
+        setNavStatus(estadoInicial);
+        if (estadoInicial?.speechText) {
+          lastSpokenStepRef.current = `${activeTrip.estado}-1`;
+          hablarIndicacion(estadoInicial.speechText);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTrip?.id, activeTrip?.estado]);
+
+  // Actualizar las indicaciones ("En 200 m gire a la derecha...") en tiempo real a medida que el chofer avanza con el GPS
+  useEffect(() => {
+    if (!guidedRoute || !location) return;
+    const nuevoEstado = calcularEstadoNavegacionEnVivo(
+      guidedRoute,
+      location.latitude,
+      location.longitude,
+      navStepIndex
+    );
+    if (nuevoEstado) {
+      if (nuevoEstado.stepIndex !== navStepIndex) {
+        setNavStepIndex(nuevoEstado.stepIndex);
+        const stepKey = `${activeTrip?.estado}-${nuevoEstado.stepIndex}`;
+        if (lastSpokenStepRef.current !== stepKey && nuevoEstado.speechText) {
+          lastSpokenStepRef.current = stepKey;
+          hablarIndicacion(nuevoEstado.speechText);
+        }
+      }
+      setNavStatus(nuevoEstado);
+    }
+  }, [location?.latitude, location?.longitude, guidedRoute]);
 
   useEffect(() => {
     // Al reconectar socket (por pérdida temporal de señal o suspensión)
@@ -572,7 +671,11 @@ export default function MainScreen({ route, navigation }) {
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
         <iframe 
           title="Mapa de Casilda"
-          src={`https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&zoom=${location ? 16 : 14}&maptype=roadmap`}
+          src={
+            activeTrip && guidedRoute
+              ? `https://www.google.com/maps/embed/v1/directions?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&origin=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&destination=${guidedRoute.destinoLat},${guidedRoute.destinoLng}&mode=driving`
+              : `https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&zoom=${location ? 16 : 14}&maptype=roadmap`
+          }
           style={{ width: '100%', height: '100%', border: 0 }}
         />
       </View>
@@ -613,34 +716,136 @@ export default function MainScreen({ route, navigation }) {
         </View>
       )}
 
-      {/* HUD Superior de Estado Automático del Chofer (Glassmorphism) */}
-      <View style={[
-        styles.header, 
-        { 
-          backgroundColor: 'rgba(15, 23, 42, 0.94)', 
-          borderColor: viajeTelefonicoActivo 
-            ? '#f59e0b' 
-            : (activeTrip ? '#ef4444' : '#10b981'),
-          boxShadow: viajeTelefonicoActivo 
-            ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(245, 158, 11, 0.35)' 
-            : (activeTrip 
-                ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(239, 68, 68, 0.35)' 
-                : '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.35)')
-        }
-      ]}>
+      {/* Banner Superior de Navegación GPS Guiada Paso a Paso (cuando hay viaje activo) o HUD de Estado */}
+      {activeTrip && navStatus ? (
+        <View style={{
+          position: 'absolute',
+          top: 14,
+          left: 14,
+          right: 14,
+          maxWidth: 640,
+          alignSelf: 'center',
+          width: '94%',
+          backgroundColor: '#065f46',
+          borderRadius: 18,
+          borderWidth: 2,
+          borderColor: '#10b981',
+          padding: 14,
+          zIndex: 120,
+          boxShadow: '0 8px 25px rgba(0,0,0,0.6)',
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 56,
+              height: 56,
+              borderRadius: 14,
+              backgroundColor: 'rgba(6, 78, 59, 0.9)',
+              borderWidth: 1.5,
+              borderColor: '#34d399',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 26, color: '#fff', fontWeight: '900' }}>{navStatus.icon}</Text>
+              <Text style={{ fontSize: 10, color: '#a7f3d0', fontWeight: '800' }}>
+                {formatearDistancia(navStatus.distToNextTurnMeters)}
+              </Text>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#ecfdf5', fontSize: 16, fontWeight: '900', lineHeight: 21 }}>
+                {navStatus.mainInstruction}
+              </Text>
+              <Text style={{ color: '#a7f3d0', fontSize: 12, fontWeight: '600', marginTop: 3 }} numberOfLines={2}>
+                {navStatus.subInstruction}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{
+            marginTop: 10,
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(167, 243, 208, 0.25)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}>
+            <Text style={{ color: '#d1fae5', fontSize: 12, fontWeight: '800' }}>
+              📍 Falta: {formatearDistancia(navStatus.remainingTotalMeters)} • ⏱️ ~{navStatus.etaMinutes} min
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  const nuevo = !vozActiva;
+                  setVozActiva(nuevo);
+                  if (nuevo && navStatus.speechText) {
+                    hablarIndicacion(navStatus.speechText);
+                  }
+                }}
+                style={{
+                  backgroundColor: vozActiva ? 'rgba(16, 185, 129, 0.35)' : 'rgba(15, 23, 42, 0.6)',
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#34d399',
+                  cursor: 'pointer',
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
+                  {vozActiva ? '🔊 Voz Activa' : '🔇 Voz Silenciada'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => abrirNavegacionVozGoogleMaps(guidedRoute?.destinoLat, guidedRoute?.destinoLng)}
+                style={{
+                  backgroundColor: '#0284c7',
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#38bdf8',
+                  cursor: 'pointer',
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>🧭 Abrir Voz GPS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : (
         <View style={[
-          styles.statusIndicator, 
+          styles.header, 
           { 
-            backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
-            boxShadow: viajeTelefonicoActivo ? '0 0 8px #f59e0b' : (activeTrip ? '0 0 8px #ef4444' : '0 0 8px #10b981')
+            backgroundColor: 'rgba(15, 23, 42, 0.94)', 
+            borderColor: viajeTelefonicoActivo 
+              ? '#f59e0b' 
+              : (activeTrip ? '#ef4444' : '#10b981'),
+            boxShadow: viajeTelefonicoActivo 
+              ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(245, 158, 11, 0.35)' 
+              : (activeTrip 
+                  ? '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(239, 68, 68, 0.35)' 
+                  : '0 6px 20px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.35)')
           }
-        ]} />
-        <Text style={[styles.statusText, { color: '#f8fafc' }]}>
-          {viajeTelefonicoActivo 
-            ? 'OCUPADO • VIAJE TELEFÓNICO EN CURSO' 
-            : (activeTrip ? 'OCUPADO • EN VIAJE ACTIVO' : 'EN LÍNEA • LIBRE (AUTOMÁTICO)')}
-        </Text>
-      </View>
+        ]}>
+          <View style={[
+            styles.statusIndicator, 
+            { 
+              backgroundColor: viajeTelefonicoActivo ? '#f59e0b' : (activeTrip ? '#ef4444' : '#10b981'),
+              boxShadow: viajeTelefonicoActivo ? '0 0 8px #f59e0b' : (activeTrip ? '0 0 8px #ef4444' : '0 0 8px #10b981')
+            }
+          ]} />
+          <Text style={[styles.statusText, { color: '#f8fafc' }]}>
+            {viajeTelefonicoActivo 
+              ? 'OCUPADO • VIAJE TELEFÓNICO EN CURSO' 
+              : (activeTrip ? 'OCUPADO • EN VIAJE ACTIVO' : 'EN LÍNEA • LIBRE (AUTOMÁTICO)')}
+          </Text>
+        </View>
+      )}
 
       <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, paddingBottom: 40 }]}>
         {/* Barra superior estilo bottom-sheet */}
