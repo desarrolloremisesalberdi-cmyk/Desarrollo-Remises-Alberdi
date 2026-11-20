@@ -17,45 +17,69 @@ function DashboardMap() {
   const [activeDrivers, setActiveDrivers] = useState({});
 
   useEffect(() => {
-    // 1. Cargar todos los choferes para tener la base real de desconectados
-    fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          const dict = {};
-          data.choferes.forEach(ch => {
-            dict[ch.id || ch.dni] = {
-              chofer_id: ch.id || ch.dni,
-              dni: ch.dni,
-              movil: ch.numero_movil,
-              lat: ch.lat,
-              lng: ch.lng,
-              isOnline: ch.is_online,
-              estado: ch.estado,
-              foto_url: ch.foto_url
-            };
-          });
-          setActiveDrivers(dict);
-        }
-      })
-      .catch(err => console.error("Error cargando choferes:", err));
+    const cargarChoferes = () => {
+      fetch('https://desarrollo-remises-alberdi.onrender.com/api/choferes')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.choferes)) {
+            setActiveDrivers((prev) => {
+              const dict = { ...prev };
+              data.choferes.forEach(ch => {
+                const key = String(ch.id || ch.dni);
+                const existing = dict[key] || {};
+                dict[key] = {
+                  ...existing,
+                  chofer_id: ch.id || ch.dni,
+                  dni: ch.dni,
+                  movil: ch.numero_movil,
+                  nombre: `${ch.nombre || ''} ${ch.apellido || ''}`.trim(),
+                  lat: ch.lat != null ? ch.lat : existing.lat,
+                  lng: ch.lng != null ? ch.lng : existing.lng,
+                  isOnline: Boolean(ch.is_online),
+                  estado: ch.estado || (ch.is_online ? 'libre' : 'inactivo'),
+                  foto_url: ch.foto_url || existing.foto_url
+                };
+              });
+              return dict;
+            });
+          }
+        })
+        .catch(err => console.error("Error cargando choferes:", err));
+    };
+
+    // 1. Cargar al iniciar, al reconectar socket y sincronizar cada 15 segundos entre todas las PCs abiertas
+    cargarChoferes();
+    const syncInterval = setInterval(cargarChoferes, 15000);
+    socket.on('connect', cargarChoferes);
 
     // 2. Escuchar pulsos en tiempo real
     socket.on('driver_location', (data) => {
       setActiveDrivers((prev) => {
-        const oldDriver = prev[data.chofer_id] || {};
-        const oldEstado = oldDriver.estado || 'inactivo';
-        // Si la app móvil envía estado explícito ('ocupado' | 'libre') lo usamos; si no, inferimos de isOnline.
+        const targetKey = Object.keys(prev).find((k) => {
+          const d = prev[k];
+          return (
+            String(k) === String(data.chofer_id) ||
+            (data.dni && String(d.dni) === String(data.dni)) ||
+            (data.movil && String(d.movil) === String(data.movil))
+          );
+        }) || String(data.chofer_id);
+
+        const oldDriver = prev[targetKey] || {};
+        const oldEstado = oldDriver.estado || 'libre';
         const newEstado = data.estado
           ? data.estado
           : (data.isOnline ? 'libre' : (oldEstado === 'ocupado' ? 'ocupado' : 'inactivo'));
         
         return {
           ...prev,
-          [data.chofer_id]: {
+          [targetKey]: {
             ...oldDriver, 
             ...data,
-            isOnline: true, // Si recibimos pulso, sabemos fehacientemente que la app está abierta
+            chofer_id: oldDriver.chofer_id || data.chofer_id,
+            dni: oldDriver.dni || data.dni,
+            movil: oldDriver.movil || data.movil,
+            foto_url: data.foto_url || oldDriver.foto_url,
+            isOnline: true,
             estado: newEstado
           }
         };
@@ -64,12 +88,14 @@ function DashboardMap() {
 
     socket.on('driver_disconnected', (data) => {
       setActiveDrivers((prev) => {
-        if (!prev[data.chofer_id]) return prev;
+        const targetKey = Object.keys(prev).find((k) => String(k) === String(data.chofer_id));
+        if (!targetKey) return prev;
         return {
           ...prev,
-          [data.chofer_id]: {
-            ...prev[data.chofer_id],
-            isOnline: false
+          [targetKey]: {
+            ...prev[targetKey],
+            isOnline: false,
+            estado: 'inactivo'
           }
         };
       });
@@ -90,7 +116,7 @@ function DashboardMap() {
           ...prev,
           [targetKey]: {
             ...prev[targetKey],
-            estado: data.estado,
+            estado: data.estado || 'libre',
             isOnline: data.isOnline !== undefined ? data.isOnline : prev[targetKey].isOnline
           }
         };
@@ -98,6 +124,8 @@ function DashboardMap() {
     });
 
     return () => {
+      clearInterval(syncInterval);
+      socket.off('connect', cargarChoferes);
       socket.off('driver_location');
       socket.off('driver_disconnected');
       socket.off('driver_status_changed');
@@ -134,9 +162,9 @@ function DashboardMap() {
     }
   };
 
-  // Calcular totales reales
+  // Calcular totales reales (asegurando que ningún chofer conectado quede sin categoría)
   const driversList = Object.values(activeDrivers);
-  const autosLibres = driversList.filter(d => d.isOnline && d.estado === 'libre').length;
+  const autosLibres = driversList.filter(d => d.isOnline && (!d.estado || d.estado === 'libre')).length;
   const autosOcupados = driversList.filter(d => d.isOnline && (d.estado === 'ocupado' || d.estado === 'inactivo')).length;
   const autosDesconectados = driversList.filter(d => !d.isOnline).length;
 
