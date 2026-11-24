@@ -113,7 +113,7 @@ export default function MainScreen({ route, navigation }) {
       }
     });
     
-    newSocket.on('new_ride_request', (viaje) => {
+    newSocket.on('new_ride_request', async (viaje) => {
       if (viajeTelefonicoRef.current || activeTripRef.current) {
         return; // Ocupado en otro viaje
       }
@@ -121,6 +121,33 @@ export default function MainScreen({ route, navigation }) {
       if (viaje.chofer_destinado_id && String(viaje.chofer_destinado_id) !== String(chofer.id)) {
         return;
       }
+
+      // Si por alguna razón no tiene origen_direccion o es genérico, intentar geocodificar de inmediato
+      if (!viaje.origen_direccion || viaje.origen_direccion === 'Mi ubicación actual' || viaje.origen_direccion.trim() === '' || String(viaje.origen_direccion).startsWith('-')) {
+        if (viaje.origen_lat && viaje.origen_lng) {
+          try {
+            const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${viaje.origen_lat}&lon=${viaje.origen_lng}&format=json`);
+            if (nomRes.ok) {
+              const nomData = await nomRes.json();
+              if (nomData && nomData.address) {
+                const addr = nomData.address;
+                const calle = addr.road || addr.pedestrian || addr.suburb || '';
+                const altura = addr.house_number ? ` ${addr.house_number}` : '';
+                const barrio = addr.neighbourhood || addr.suburb ? ` (${addr.neighbourhood || addr.suburb})` : '';
+                const ciudad = addr.city || addr.town || addr.village || 'Casilda';
+                if (calle) {
+                  viaje.origen_direccion = `${calle}${altura}${barrio}, ${ciudad}`;
+                } else if (nomData.display_name) {
+                  viaje.origen_direccion = nomData.display_name.split(',').slice(0, 3).join(',').trim();
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error reverse geocoding en app-chofer native:', e);
+          }
+        }
+      }
+
       setIncomingRide(viaje);
     });
 
@@ -886,18 +913,29 @@ export default function MainScreen({ route, navigation }) {
                 <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>⭐ ¡El pasajero te eligió especialmente a ti!</Text>
               </View>
             )}
-            <Text style={[styles.notificationText, { color: theme.text }]}>ID Viaje: #{incomingRide.id || 'N/A'}</Text>
             {incomingRide.pasajero_nombre && (
-              <Text style={[styles.notificationText, { color: theme.text, fontWeight: 'bold' }]}>Pasajero: {incomingRide.pasajero_nombre}</Text>
-            )}
-            {incomingRide.origen_direccion ? (
-              <Text style={[styles.notificationText, { color: '#38bdf8', fontWeight: 'bold' }]}>
-                📍 Origen: {incomingRide.origen_direccion}
+              <Text style={[styles.notificationText, { color: '#ffffff', fontWeight: 'bold', fontSize: 16, marginBottom: 8 }]}>
+                👤 Pasajero: {incomingRide.pasajero_nombre}
               </Text>
-            ) : null}
-            <Text style={[styles.notificationText, { color: theme.text }]}>
-              Coordenadas: {incomingRide.origen_lat}, {incomingRide.origen_lng}
-            </Text>
+            )}
+
+            <View style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              borderWidth: 1,
+              borderColor: '#38bdf8',
+              borderRadius: 12,
+              padding: 12,
+              marginVertical: 8,
+              width: '100%',
+              alignItems: 'center'
+            }}>
+              <Text style={{ color: '#38bdf8', fontWeight: '800', fontSize: 12, textTransform: 'uppercase', marginBottom: 4 }}>
+                📍 Domicilio de Recogida
+              </Text>
+              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 15, textAlign: 'center' }}>
+                {incomingRide.origen_direccion || 'Ubicación seleccionada en Casilda'}
+              </Text>
+            </View>
 
             {/* Aviso especial para Viaje Fuera de Casilda / Pago */}
             {incomingRide.es_fuera_de_casilda && (

@@ -415,6 +415,26 @@ export default function MapScreen({ route, navigation }) {
           console.log('Reverse geocode error:', e);
         }
 
+        if (direccionTexto === 'Mi ubicación actual') {
+          try {
+            const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+            if (nomRes.ok) {
+              const nomData = await nomRes.json();
+              if (nomData && nomData.address) {
+                const addr = nomData.address;
+                const calle = addr.road || addr.pedestrian || addr.suburb || '';
+                const altura = addr.house_number ? ` ${addr.house_number}` : '';
+                const ciudad = addr.city || addr.town || addr.village || 'Casilda';
+                if (calle) {
+                  direccionTexto = `${calle}${altura}, ${ciudad}`;
+                } else if (nomData.display_name) {
+                  direccionTexto = nomData.display_name.split(',').slice(0, 3).join(',').trim();
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
         setOrigenTexto(direccionTexto);
         if (origenRef.current) {
           origenRef.current.setAddressText(direccionTexto);
@@ -518,7 +538,8 @@ export default function MapScreen({ route, navigation }) {
           origen_lng: coordsOrigen.lng,
           destino_lat: coordsDestino.lat,
           destino_lng: coordsDestino.lng,
-          chofer_destinado_id: choferDestinado ? choferDestinado.id : null
+          chofer_destinado_id: choferDestinado ? choferDestinado.id : null,
+          origen_direccion: origenTexto || ''
         }),
       });
       

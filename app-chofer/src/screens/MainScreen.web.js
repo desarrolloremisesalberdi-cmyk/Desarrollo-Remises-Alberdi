@@ -205,13 +205,40 @@ export default function MainScreen({ route, navigation }) {
     });
 
     // Escuchar solicitudes de viaje nuevas
-    socket.on('new_ride_request', (viaje) => {
+    socket.on('new_ride_request', async (viaje) => {
       if (viajeTelefonicoRef.current || activeTripRef.current) {
         return; // Chofer ocupado en otro viaje
       }
       if (viaje.chofer_destinado_id && String(viaje.chofer_destinado_id) !== String(chofer.id)) {
         return; // Asignado a otro chofer
       }
+
+      // Si por alguna razón no tiene origen_direccion o es genérico, intentar geocodificar de inmediato
+      if (!viaje.origen_direccion || viaje.origen_direccion === 'Mi ubicación actual' || viaje.origen_direccion.trim() === '' || String(viaje.origen_direccion).startsWith('-')) {
+        if (viaje.origen_lat && viaje.origen_lng) {
+          try {
+            const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${viaje.origen_lat}&lon=${viaje.origen_lng}&format=json`);
+            if (nomRes.ok) {
+              const nomData = await nomRes.json();
+              if (nomData && nomData.address) {
+                const addr = nomData.address;
+                const calle = addr.road || addr.pedestrian || addr.suburb || '';
+                const altura = addr.house_number ? ` ${addr.house_number}` : '';
+                const barrio = addr.neighbourhood || addr.suburb ? ` (${addr.neighbourhood || addr.suburb})` : '';
+                const ciudad = addr.city || addr.town || addr.village || 'Casilda';
+                if (calle) {
+                  viaje.origen_direccion = `${calle}${altura}${barrio}, ${ciudad}`;
+                } else if (nomData.display_name) {
+                  viaje.origen_direccion = nomData.display_name.split(',').slice(0, 3).join(',').trim();
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error reverse geocoding en app-chofer:', e);
+          }
+        }
+      }
+
       setIncomingRide(viaje);
     });
 
@@ -494,7 +521,10 @@ export default function MainScreen({ route, navigation }) {
       const data = await response.json();
       if (data.success) {
         alert('¡Viaje Aceptado! Dirígete al punto de partida.');
-        setActiveTrip(data.viaje);
+        setActiveTrip({
+          ...data.viaje,
+          origen_direccion: incomingRide.origen_direccion || (data.viaje && data.viaje.origen_direccion)
+        });
         setConfirmadoJubilado(false);
         setIsOnline(false); // Automáticamente pasa a ocupado
       } else {
@@ -793,13 +823,29 @@ export default function MainScreen({ route, navigation }) {
                 <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>⭐ ¡El pasajero te eligió especialmente a ti!</Text>
               </View>
             )}
-            <Text style={[styles.notificationText, { color: theme.text }]}>ID Viaje: #{incomingRide.id || 'N/A'}</Text>
             {incomingRide.pasajero_nombre && (
-              <Text style={[styles.notificationText, { color: theme.text, fontWeight: 'bold' }]}>Pasajero: {incomingRide.pasajero_nombre}</Text>
+              <Text style={[styles.notificationText, { color: '#ffffff', fontWeight: 'bold', fontSize: 16, marginBottom: 8 }]}>
+                👤 Pasajero: {incomingRide.pasajero_nombre}
+              </Text>
             )}
-            <Text style={[styles.notificationText, { color: theme.text }]}>
-              Se requiere un móvil en las coordenadas: {incomingRide.origen_lat}, {incomingRide.origen_lng}
-            </Text>
+
+            <View style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              borderWidth: 1,
+              borderColor: '#38bdf8',
+              borderRadius: 12,
+              padding: 12,
+              marginVertical: 8,
+              width: '100%',
+              alignItems: 'center'
+            }}>
+              <Text style={{ color: '#38bdf8', fontWeight: '800', fontSize: 12, textTransform: 'uppercase', marginBottom: 4 }}>
+                📍 Domicilio de Recogida
+              </Text>
+              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 15, textAlign: 'center' }}>
+                {incomingRide.origen_direccion || 'Ubicación seleccionada en Casilda'}
+              </Text>
+            </View>
             {incomingRide.es_jubilado && (
               <View style={{ backgroundColor: '#10b981', padding: 8, borderRadius: 8, marginVertical: 10, alignItems: 'center' }}>
                 <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>¡ATENCIÓN: PASAJERO JUBILADO!</Text>

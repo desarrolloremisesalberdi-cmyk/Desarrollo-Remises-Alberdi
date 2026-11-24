@@ -312,15 +312,57 @@ app.get('/api/choferes/cercanos', async (req, res) => {
   }
 });
 
+// Función para geocodificación inversa (obtener calle y altura en Casilda a partir de GPS)
+async function resolverDireccionDesdeCoords(lat, lng) {
+  if (!lat || !lng) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+      headers: { 'User-Agent': 'RemisesAlberdiApp/1.0' },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const calle = addr.road || addr.pedestrian || addr.suburb || '';
+        const altura = addr.house_number ? ` ${addr.house_number}` : '';
+        const barrio = addr.neighbourhood || addr.suburb ? ` (${addr.neighbourhood || addr.suburb})` : '';
+        const ciudad = addr.city || addr.town || addr.village || 'Casilda';
+        if (calle) {
+          return `${calle}${altura}${barrio}, ${ciudad}`;
+        }
+      }
+      if (data && data.display_name) {
+        return data.display_name.split(',').slice(0, 3).join(',').trim();
+      }
+    }
+  } catch (err) {
+    console.error('Error al resolver dirección inversa en backend:', err.message);
+  }
+  return null;
+}
+
 // Solicitar un viaje
 app.post('/api/viajes/request', async (req, res) => {
-  const { 
+  let { 
     usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, 
     destino_fijo_id, costo_fijo, chofer_destinado_id,
     metodo_pago, origen_direccion, es_fuera_de_casilda 
   } = req.body;
 
   try {
+    // Si no se proporcionó domicilio específico o es genérico/coordenadas, resolver por geocodificación inversa
+    if (!origen_direccion || origen_direccion === 'Mi ubicación actual' || origen_direccion.trim() === '' || origen_direccion.startsWith('-')) {
+      const dirGeocodificada = await resolverDireccionDesdeCoords(origen_lat, origen_lng);
+      if (dirGeocodificada) {
+        origen_direccion = dirGeocodificada;
+      } else {
+        origen_direccion = 'Ubicación seleccionada en Casilda';
+      }
+    }
     const newViaje = await db.query(
       'INSERT INTO viajes (usuario_id, origen_lat, origen_lng, destino_lat, destino_lng, destino_fijo_id, costo_fijo, estado, hora_inicio, metodo_pago, es_fuera_de_casilda, origen_direccion) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11) RETURNING *',
       [
