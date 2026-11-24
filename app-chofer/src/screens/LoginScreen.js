@@ -6,22 +6,23 @@ import * as Location from 'expo-location';
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 async function obtenerUbicacionRealAlLoguear() {
+  const fallbackCasilda = { latitude: -33.044167, longitude: -61.168056 };
   try {
     if (Platform.OS === 'web') {
       if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
         return await new Promise((resolve) => {
           navigator.geolocation.getCurrentPosition(
             (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-            () => resolve(null),
+            () => resolve(fallbackCasilda),
             { enableHighAccuracy: true, maximumAge: 0, timeout: 6000 }
           );
         });
       }
-      return null;
+      return fallbackCasilda;
     }
 
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
+    if (status !== 'granted') return fallbackCasilda;
 
     try {
       const current = await Location.getCurrentPositionAsync({
@@ -45,7 +46,7 @@ async function obtenerUbicacionRealAlLoguear() {
   } catch (err) {
     console.log('No se pudo obtener GPS previo al login:', err);
   }
-  return null;
+  return fallbackCasilda;
 }
 
 export default function LoginScreen({ navigation }) {

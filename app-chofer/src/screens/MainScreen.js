@@ -835,13 +835,14 @@ export default function MainScreen({ route, navigation }) {
         showsMyLocationButton={false}
         showsCompass={false}
       >
-        {location && (
-          <Marker
-            coordinate={{ latitude: location.latitude, longitude: location.longitude }}
-            title="Mi Taxi Alberdi"
-            description={`Móvil #${chofer.numero_movil || '14'}`}
-          />
-        )}
+        <Marker
+          coordinate={{ 
+            latitude: location ? location.latitude : -33.044167, 
+            longitude: location ? location.longitude : -61.168056 
+          }}
+          title="Mi Taxi Alberdi"
+          description={`Móvil #${chofer.numero_movil || '14'}`}
+        />
 
         {activeTrip && activeTrip.origen_lat && activeTrip.origen_lng && (
           <Marker

@@ -1424,7 +1424,7 @@ export default function MapScreen({ route, navigation }) {
             
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
               <View>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: theme.text }}>🚖 Elige tu Chofer</Text>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: '#ffffff' }}>🚖 Elige tu Chofer</Text>
                 <Text style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>Selecciona un móvil cercano o el más rápido</Text>
               </View>
               <TouchableOpacity 
@@ -1498,7 +1498,7 @@ export default function MapScreen({ route, navigation }) {
                         />
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <Text style={{ color: theme.text, fontWeight: '700', fontSize: 15 }}>
+                            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>
                               {ch.nombre} {ch.apellido}
                             </Text>
                             <View style={{ backgroundColor: '#10b981', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>

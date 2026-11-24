@@ -962,7 +962,7 @@ export default function MapScreen({ route, navigation }) {
             
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
               <View>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: theme.text }}>🚖 Elige tu Chofer</Text>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: '#ffffff' }}>🚖 Elige tu Chofer</Text>
                 <Text style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>Selecciona un móvil cercano o el más rápido</Text>
               </View>
               <TouchableOpacity 
@@ -1037,7 +1037,7 @@ export default function MapScreen({ route, navigation }) {
                         />
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ color: theme.text, fontWeight: '700', fontSize: 15 }}>
+                            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>
                               {ch.nombre} {ch.apellido}
                             </Text>
                             <View style={{ backgroundColor: '#3b82f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -1082,7 +1082,7 @@ export default function MapScreen({ route, navigation }) {
                 ) : (
                   <View style={{ padding: 25, alignItems: 'center' }}>
                     <Text style={{ fontSize: 28, marginBottom: 8 }}>⏳</Text>
-                    <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 15, textAlign: 'center' }}>
+                    <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 15, textAlign: 'center' }}>
                       No hay choferes libres en este momento
                     </Text>
                     <Text style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 6 }}>
@@ -1574,14 +1574,17 @@ const darkTheme = {
   bg: '#0b1320',
   cardBg: 'rgba(15, 23, 42, 0.94)',
   border: 'rgba(255, 255, 255, 0.08)',
+  text: '#f8fafc',
+  placeholder: '#94a3b8',
   accent: '#10b981', // Verde Esmeralda Neón Oficial
 };
 
 const lightTheme = {
-  bg: '#f1f5f9',
-  cardBg: 'rgba(255, 255, 255, 0.95)',
-  border: 'rgba(0, 0, 0, 0.1)',
-  text: '#0f172a',
+  bg: '#0b1320',
+  cardBg: 'rgba(15, 23, 42, 0.94)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  text: '#f8fafc',
+  placeholder: '#94a3b8',
   accent: '#10b981',
 };
 

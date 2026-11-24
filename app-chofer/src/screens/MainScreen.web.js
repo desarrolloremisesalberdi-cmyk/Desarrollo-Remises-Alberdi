@@ -12,7 +12,7 @@ export default function MainScreen({ route, navigation }) {
   const [viajeTelefonicoActivo, setViajeTelefonicoActivo] = useState(false);
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
-  const [location, setLocation] = useState(() => route?.params?.initialLocation || null);
+  const [location, setLocation] = useState(() => route?.params?.initialLocation || { latitude: -33.044167, longitude: -61.168056 });
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
   const [recaudacionHoy, setRecaudacionHoy] = useState(0);
   const [enEspera, setEnEspera] = useState(false);
@@ -44,6 +44,39 @@ export default function MainScreen({ route, navigation }) {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving`;
     if (typeof window !== 'undefined') {
       window.open(url, '_blank');
+    }
+  };
+
+  const solicitarUbicacionWeb = () => {
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const coords = { latitude, longitude };
+          locationRef.current = coords;
+          setLocation(coords);
+          const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
+          socket.emit('update_location', {
+            chofer_id: chofer.id || 'sim-1',
+            dni: chofer.dni || '31861718',
+            movil: chofer.numero_movil || '14',
+            lat: latitude,
+            lng: longitude,
+            isOnline: isOnline,
+            estado: ocupado ? 'ocupado' : 'libre',
+            foto_url: chofer.foto_url || null
+          });
+          alert('Ubicación GPS sincronizada.');
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            alert('Permiso de GPS denegado en tu navegador. Haz clic en el ícono del candado o ubicación en la barra de direcciones de tu navegador para permitir el acceso.');
+          } else {
+            alert('No se pudo obtener el GPS exacto en este navegador/PC (puede deberse a VPN o falta de sensor satelital). Se mantiene la ubicación central en Casilda.');
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+      );
     }
   };
 
@@ -668,16 +701,86 @@ export default function MainScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg }]}>
+      <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg, position: 'relative', overflow: 'hidden' }]}>
         <iframe 
           title="Mapa de Casilda"
           src={
             activeTrip && guidedRoute
               ? `https://www.google.com/maps/embed/v1/directions?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&origin=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&destination=${guidedRoute.destinoLat},${guidedRoute.destinoLng}&mode=driving`
-              : `https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&zoom=${location ? 16 : 14}&maptype=roadmap`
+              : `https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&zoom=16&maptype=roadmap`
           }
           style={{ width: '100%', height: '100%', border: 0 }}
         />
+
+        {/* Marcador visual de Mi Taxi sobre el mapa web */}
+        <View style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: [{ translateX: -60 }, { translateY: -45 }],
+          alignItems: 'center',
+          pointerEvents: 'none',
+          zIndex: 20
+        }}>
+          <View style={{
+            backgroundColor: '#10b981',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 14,
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            flexDirection: 'row',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.5,
+            shadowRadius: 5
+          }}>
+            <Text style={{ fontSize: 13, marginRight: 4 }}>🚕</Text>
+            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 12 }}>
+              Móvil #{chofer.numero_movil || '14'}
+            </Text>
+          </View>
+          <View style={{
+            width: 16,
+            height: 16,
+            borderRadius: 8,
+            backgroundColor: '#10b981',
+            borderWidth: 3,
+            borderColor: '#ffffff',
+            marginTop: 3,
+            shadowColor: '#10b981',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.9,
+            shadowRadius: 6
+          }} />
+        </View>
+
+        {/* Botón flotante para pedir / actualizar ubicación en PC */}
+        <TouchableOpacity
+          onPress={solicitarUbicacionWeb}
+          style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            backgroundColor: '#1e293b',
+            borderColor: '#3b82f6',
+            borderWidth: 1,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 20,
+            flexDirection: 'row',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.4,
+            shadowRadius: 4,
+            zIndex: 50
+          }}
+        >
+          <Text style={{ fontSize: 14, marginRight: 4 }}>📍</Text>
+          <Text style={{ color: '#60a5fa', fontWeight: 'bold', fontSize: 12 }}>Mi Ubicación</Text>
+        </TouchableOpacity>
       </View>
       
       {/* Notificación de Nuevo Viaje */}
