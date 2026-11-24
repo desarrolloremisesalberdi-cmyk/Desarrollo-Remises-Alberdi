@@ -80,6 +80,9 @@ async function initCalificacionesTable() {
         BEGIN
           ALTER TABLE viajes ADD COLUMN origen_direccion TEXT;
         EXCEPTION WHEN duplicate_column THEN END;
+        BEGIN
+          ALTER TABLE choferes ADD COLUMN ultima_conexion TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+        EXCEPTION WHEN duplicate_column THEN END;
       END $$;
     `);
     console.log('✅ Tablas y columnas de calificación verificadas correctamente');
@@ -285,7 +288,7 @@ app.get('/api/choferes/cercanos', async (req, res) => {
               COALESCE(calificacion_promedio, 5.0) as calificacion_promedio,
               COALESCE(total_calificaciones, 0) as total_calificaciones
        FROM choferes 
-       WHERE is_online = true AND estado = 'libre' AND (suspendido = false OR suspendido IS NULL) AND lat IS NOT NULL AND lng IS NOT NULL`
+       WHERE is_online = true AND estado = 'libre' AND (suspendido = false OR suspendido IS NULL) AND lat IS NOT NULL AND lng IS NOT NULL AND (ultima_conexion IS NULL OR ultima_conexion >= NOW() - INTERVAL '1 hour')`
     );
 
     const choferesConDistancia = result.rows.map(ch => {
@@ -466,7 +469,7 @@ app.post('/api/choferes/set-status', async (req, res) => {
   try {
     const isOnline = estado === 'libre' || estado === 'ocupado';
     const result = await db.query(
-      'UPDATE choferes SET estado = $1, is_online = $2 WHERE id = $3 OR dni = $4 RETURNING *',
+      'UPDATE choferes SET estado = $1, is_online = $2, ultima_conexion = NOW() WHERE id = $3 OR dni = $4 RETURNING *',
       [estado, isOnline, chofer_id, chofer_id]
     );
 
@@ -485,6 +488,10 @@ app.post('/api/choferes/set-status', async (req, res) => {
       origen: origen || 'base_telefonica',
       numero_movil: chofer.numero_movil
     });
+
+    if (!isOnline) {
+      io.emit('driver_disconnected', { chofer_id: chofer.id });
+    }
 
     res.json({ success: true, chofer });
   } catch (error) {
@@ -648,14 +655,14 @@ app.post('/api/choferes/login', async (req, res) => {
           const parsedLat = parseFloat(lat);
           const parsedLng = parseFloat(lng);
           await db.query(
-            "UPDATE choferes SET estado = 'libre', is_online = true, lat = $1, lng = $2 WHERE id = $3",
+            "UPDATE choferes SET estado = 'libre', is_online = true, lat = $1, lng = $2, ultima_conexion = NOW() WHERE id = $3",
             [parsedLat, parsedLng, chofer.id]
           );
           chofer.lat = parsedLat;
           chofer.lng = parsedLng;
         } else {
           await db.query(
-            "UPDATE choferes SET estado = 'libre', is_online = true WHERE id = $1",
+            "UPDATE choferes SET estado = 'libre', is_online = true, ultima_conexion = NOW() WHERE id = $1",
             [chofer.id]
           );
         }
@@ -1529,17 +1536,17 @@ io.on('connection', (socket) => {
     try {
       if (data.estado === 'ocupado') {
         await db.query(
-          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = 'ocupado' WHERE id = $3 OR dni = $4",
+          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = 'ocupado', ultima_conexion = NOW() WHERE id = $3 OR dni = $4",
           [safeLat, safeLng, data.chofer_id, data.dni]
         );
       } else if (data.isOnline) {
         await db.query(
-          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = 'libre' WHERE id = $3 OR dni = $4",
+          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = 'libre', ultima_conexion = NOW() WHERE id = $3 OR dni = $4",
           [safeLat, safeLng, data.chofer_id, data.dni]
         );
       } else {
         await db.query(
-          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = true, estado = CASE WHEN estado = 'ocupado' THEN 'ocupado' ELSE 'inactivo' END WHERE id = $3 OR dni = $4",
+          "UPDATE choferes SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), is_online = false, estado = 'inactivo', ultima_conexion = NOW() WHERE id = $3 OR dni = $4",
           [safeLat, safeLng, data.chofer_id, data.dni]
         );
       }
@@ -1567,13 +1574,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('operator_set_driver_status', async (data) => {
-    io.emit('driver_status_changed', data);
     try {
       const isOnline = data.estado === 'libre' || data.estado === 'ocupado';
       await db.query(
-        'UPDATE choferes SET estado = $1, is_online = $2 WHERE id = $3 OR dni = $4',
+        'UPDATE choferes SET estado = $1, is_online = $2, ultima_conexion = NOW() WHERE id = $3 OR dni = $4',
         [data.estado, isOnline, data.chofer_id, data.chofer_id]
       );
+      io.emit('driver_status_changed', { ...data, isOnline });
+      if (!isOnline) {
+        io.emit('driver_disconnected', { chofer_id: data.chofer_id });
+      }
     } catch (e) {
       console.error('Error al actualizar estado desde socket operador:', e);
     }
@@ -1588,8 +1598,9 @@ io.on('connection', (socket) => {
         delete driverDisconnectTimers[chofer_id];
       }
       try {
-        await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo' WHERE id = $1", [chofer_id]);
+        await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo', ultima_conexion = NOW() WHERE id = $1 OR dni = $2", [chofer_id, String(chofer_id)]);
         socket.broadcast.emit('driver_disconnected', { chofer_id });
+        io.emit('driver_status_changed', { chofer_id, estado: 'inactivo', isOnline: false });
       } catch (e) {
         console.error('Error al desconectar chofer manualmente:', e);
       }
@@ -1632,8 +1643,9 @@ io.on('connection', (socket) => {
           }
 
           console.log(`Período de inactividad prolongado para chofer ${chofer_id}. Marcando como inactivo.`);
-          await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo' WHERE id = $1", [chofer_id]);
+          await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo', ultima_conexion = NOW() WHERE id = $1 OR dni = $2", [chofer_id, String(chofer_id)]);
           io.emit('driver_disconnected', { chofer_id });
+          io.emit('driver_status_changed', { chofer_id, estado: 'inactivo', isOnline: false });
         } catch (e) {
           console.error('Error al desconectar chofer tras período de inactividad:', e);
         } finally {
@@ -1644,10 +1656,48 @@ io.on('connection', (socket) => {
   });
 });
 
+// Limpieza automática periódica: Desconectar choferes sin pulso GPS por más de 1 hora (Opción A)
+async function limpiarChoferesInactivos() {
+  try {
+    const query = `
+      UPDATE choferes
+      SET is_online = false, estado = 'inactivo'
+      WHERE is_online = true
+        AND (ultima_conexion IS NULL OR ultima_conexion < NOW() - INTERVAL '1 hour')
+        AND id NOT IN (
+          SELECT chofer_id FROM viajes 
+          WHERE chofer_id IS NOT NULL 
+            AND estado IN ('solicitado', 'en_camino', 'en_curso')
+        )
+      RETURNING id, dni, numero_movil;
+    `;
+    const res = await db.query(query);
+    if (res.rows && res.rows.length > 0) {
+      res.rows.forEach(ch => {
+        console.log(`[Auto-Cleanup] Chofer móvil #${ch.numero_movil} (ID: ${ch.id}) desconectado automáticamente por inactividad > 1 hora.`);
+        io.emit('driver_disconnected', { chofer_id: ch.id });
+        io.emit('driver_status_changed', {
+          chofer_id: ch.id,
+          dni: ch.dni,
+          numero_movil: ch.numero_movil,
+          estado: 'inactivo',
+          isOnline: false
+        });
+      });
+    }
+  } catch (err) {
+    console.error('Error en limpieza automática de choferes inactivos:', err);
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
+  // 1. Limpieza inmediata al arrancar el backend (elimina choferes fantasmas acumulados)
+  limpiarChoferesInactivos();
+  // 2. Revisión automática continua cada 60 segundos
+  setInterval(limpiarChoferesInactivos, 60000);
 });
 
 // Toggle suspension for a driver

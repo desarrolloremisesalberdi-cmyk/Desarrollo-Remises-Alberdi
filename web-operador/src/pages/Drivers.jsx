@@ -217,16 +217,19 @@ export default function Drivers() {
       });
       const data = await res.json();
       if (data.success) {
+        const isOnline = nuevoEstado === 'libre' || nuevoEstado === 'ocupado';
         setDriversList(prev => prev.map(d => 
           d.id === choferId ? { 
             ...d, 
             estado: nuevoEstado, 
+            is_online: isOnline,
             estado_str: nuevoEstado.charAt(0).toUpperCase() + nuevoEstado.slice(1) 
           } : d
         ));
         setSelectedDriver(prev => ({
           ...prev,
           estado: nuevoEstado,
+          is_online: isOnline,
           estado_str: nuevoEstado.charAt(0).toUpperCase() + nuevoEstado.slice(1)
         }));
       }
@@ -399,30 +402,58 @@ export default function Drivers() {
                   <p className="expiration-date">Vence el: {selectedDriver.licencia_vencimiento_str}</p>
                 </div>
 
-                <div className="detail-item" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.04)', padding: '12px 16px', borderRadius: 10, marginTop: 5 }}>
+                <div className="detail-item" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.04)', padding: '12px 16px', borderRadius: 10, marginTop: 5, flexWrap: 'wrap', gap: '10px' }}>
                   <div>
                     <span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>Estado Operativo de Despacho:</span>
-                    <strong style={{ fontSize: 15, color: selectedDriver.estado === 'libre' ? '#10b981' : '#ef4444' }}>
-                      {selectedDriver.estado === 'libre' ? '🟢 LIBRE (Recibe viajes de la app)' : '🔴 OCUPADO (No recibe viajes de la app)'}
+                    <strong style={{ 
+                      fontSize: 15, 
+                      color: selectedDriver.estado === 'libre' ? '#10b981' : (selectedDriver.estado === 'ocupado' ? '#ef4444' : '#94a3b8') 
+                    }}>
+                      {selectedDriver.estado === 'libre' 
+                        ? '🟢 LIBRE (Recibe viajes de la app)' 
+                        : (selectedDriver.estado === 'ocupado' 
+                            ? '🔴 OCUPADO (No recibe viajes de la app)' 
+                            : '⚪ DESCONECTADO (Inactivo / Fuera de turno)')}
                     </strong>
                   </div>
-                  {selectedDriver.estado === 'libre' ? (
-                    <button 
-                      className="btn btn-danger"
-                      style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold' }}
-                      onClick={() => handleToggleEstado(selectedDriver.id, 'ocupado', 'base_telefonica')}
-                    >
-                      📞 Poner Ocupado (Viaje Telefónico)
-                    </button>
-                  ) : (
-                    <button 
-                      className="btn btn-primary"
-                      style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold', backgroundColor: '#10b981', borderColor: '#10b981' }}
-                      onClick={() => handleToggleEstado(selectedDriver.id, 'libre', 'manual')}
-                    >
-                      🟢 Poner Libre
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {selectedDriver.estado === 'libre' && (
+                      <button 
+                        className="btn btn-danger"
+                        style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold' }}
+                        onClick={() => handleToggleEstado(selectedDriver.id, 'ocupado', 'base_telefonica')}
+                      >
+                        📞 Poner Ocupado (Viaje Telefónico)
+                      </button>
+                    )}
+                    {selectedDriver.estado === 'ocupado' && (
+                      <button 
+                        className="btn btn-primary"
+                        style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold', backgroundColor: '#10b981', borderColor: '#10b981' }}
+                        onClick={() => handleToggleEstado(selectedDriver.id, 'libre', 'manual')}
+                      >
+                        🟢 Poner Libre
+                      </button>
+                    )}
+                    {selectedDriver.estado === 'inactivo' && (
+                      <button 
+                        className="btn btn-primary"
+                        style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold', backgroundColor: '#10b981', borderColor: '#10b981' }}
+                        onClick={() => handleToggleEstado(selectedDriver.id, 'libre', 'manual')}
+                      >
+                        🟢 Conectar / Poner Libre
+                      </button>
+                    )}
+                    {selectedDriver.estado !== 'inactivo' && (
+                      <button 
+                        className="btn"
+                        style={{ padding: '8px 14px', fontSize: 13, fontWeight: 'bold', backgroundColor: '#334155', color: '#f8fafc', border: '1px solid #475569' }}
+                        onClick={() => handleToggleEstado(selectedDriver.id, 'inactivo', 'manual')}
+                      >
+                        ⚪ Desconectar Chofer
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               

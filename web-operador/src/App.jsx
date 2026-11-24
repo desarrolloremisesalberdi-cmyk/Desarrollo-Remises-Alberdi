@@ -139,6 +139,8 @@ function DashboardMap() {
       origen: origen
     });
 
+    const isOnline = nuevoEstado === 'libre' || nuevoEstado === 'ocupado';
+
     setActiveDrivers((prev) => {
       if (!prev[choferId]) return prev;
       return {
@@ -146,7 +148,7 @@ function DashboardMap() {
         [choferId]: {
           ...prev[choferId],
           estado: nuevoEstado,
-          isOnline: true
+          isOnline: isOnline
         }
       };
     });
@@ -285,6 +287,22 @@ function DashboardMap() {
                           🟢 Poner Libre
                         </button>
                       )}
+
+                      <button
+                        onClick={() => handleToggleEstadoChofer(driver.chofer_id, 'inactivo', 'manual')}
+                        style={{
+                          backgroundColor: '#334155',
+                          color: '#f8fafc',
+                          border: '1px solid #475569',
+                          padding: '7px 10px',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: 12
+                        }}
+                      >
+                        ⚪ Desconectar Chofer
+                      </button>
                     </div>
                   </div>
                 </Popup>

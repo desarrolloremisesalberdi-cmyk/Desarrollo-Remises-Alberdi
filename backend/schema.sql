@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.choferes (
     lat DECIMAL(10, 8),
     lng DECIMAL(11, 8),
     is_online BOOLEAN DEFAULT false,
+    ultima_conexion TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
