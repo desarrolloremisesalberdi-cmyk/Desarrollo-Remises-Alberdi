@@ -1303,12 +1303,30 @@ export default function MainScreen({ route, navigation }) {
                 </TouchableOpacity>
               </View>
             )}
+            <View style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.1)',
+              borderColor: 'rgba(56, 189, 248, 0.3)',
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 10,
+              marginBottom: 10,
+              width: '100%',
+              alignItems: 'center'
+            }}>
+              <Text style={{ color: '#38bdf8', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>
+                📍 En camino al domicilio del pasajero
+              </Text>
+              <Text style={{ color: '#cbd5e1', fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+                Al llegar y subir el pasajero, presiona el botón para iniciar el viaje al destino.
+              </Text>
+            </View>
+
             <TouchableOpacity 
               style={[
                 styles.button, 
                 { 
-                  backgroundColor: (activeTrip.es_jubilado && !confirmadoJubilado) ? '#64748b' : '#3b82f6',
-                  shadowColor: '#3b82f6',
+                  backgroundColor: (activeTrip.es_jubilado && !confirmadoJubilado) ? '#64748b' : '#10b981',
+                  shadowColor: '#10b981',
                   shadowOpacity: 0.45,
                   elevation: 5
                 }
@@ -1316,7 +1334,7 @@ export default function MainScreen({ route, navigation }) {
               onPress={empezarRecorrido}
               disabled={activeTrip.es_jubilado && !confirmadoJubilado}
             >
-              <Text style={styles.buttonText}>🚀 Empezar Recorrido</Text>
+              <Text style={styles.buttonText}>🟢 Pasajero a Bordo (Iniciar Viaje)</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[
