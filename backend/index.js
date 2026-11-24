@@ -352,7 +352,7 @@ app.post('/api/viajes/request', async (req, res) => {
         viaje.chofer_destinado_nombre = `${choferQuery.rows[0].nombre} ${choferQuery.rows[0].apellido}`;
       }
 
-      // Timeout de 30 segundos si el chofer seleccionado no responde
+      // Timeout de 60 segundos (1 minuto) si el chofer seleccionado no responde
       activeRideTimeouts[viaje.id] = setTimeout(async () => {
         try {
           const checkViaje = await db.query('SELECT estado FROM viajes WHERE id = $1', [viaje.id]);
@@ -370,7 +370,7 @@ app.post('/api/viajes/request', async (req, res) => {
         } finally {
           delete activeRideTimeouts[viaje.id];
         }
-      }, 30000);
+      }, 60000);
     }
     
     // Emitir a todos los choferes conectados que hay un nuevo viaje

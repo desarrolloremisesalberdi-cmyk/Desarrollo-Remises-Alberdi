@@ -78,7 +78,7 @@ export default function MapScreen({ route, navigation }) {
   const [choferesCercanos, setChoferesCercanos] = useState([]);
   const [cargandoChoferes, setCargandoChoferes] = useState(false);
   const [choferEsperado, setChoferEsperado] = useState(null);
-  const [segundosRestantes, setSegundosRestantes] = useState(30);
+  const [segundosRestantes, setSegundosRestantes] = useState(60);
   const countdownIntervalRef = React.useRef(null);
 
   const [origenTexto, setOrigenTexto] = useState('');
@@ -390,8 +390,8 @@ export default function MapScreen({ route, navigation }) {
         }
         if (choferDestinado) {
           setChoferEsperado(choferDestinado);
-          let sec = 30;
-          setSegundosRestantes(30);
+          let sec = 60;
+          setSegundosRestantes(60);
           setEstadoViaje(`⏳ Solicitando a Móvil #${choferDestinado.numero_movil} (${choferDestinado.nombre})...\nEsperando confirmación (${sec}s)`);
           
           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
