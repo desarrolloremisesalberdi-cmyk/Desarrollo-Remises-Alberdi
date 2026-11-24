@@ -434,6 +434,35 @@ export default function MainScreen({ route, navigation }) {
     };
   }, [isOnline, activeTrip, viajeTelefonicoActivo, chofer]);
 
+  const cerrarSesion = async () => {
+    try {
+      await fetch(`${API_URL}/api/choferes/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chofer_id: chofer.id,
+          dni: chofer.dni,
+          numero_movil: chofer.numero_movil
+        })
+      });
+    } catch (e) {
+      console.error('Error en logout HTTP:', e);
+    }
+    try {
+      if (socket) {
+        socket.emit('manual_disconnect', {
+          chofer_id: chofer.id,
+          dni: chofer.dni,
+          numero_movil: chofer.numero_movil
+        });
+      }
+    } catch (e) {}
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('chofer_user');
+    }
+    navigation.replace('Login');
+  };
+
   useEffect(() => {
     navigation.setOptions({
       headerTitleAlign: 'left',
@@ -492,11 +521,7 @@ export default function MainScreen({ route, navigation }) {
               gap: 3,
               cursor: 'pointer'
             }} 
-            onPress={() => {
-              socket.emit('manual_disconnect', { chofer_id: chofer.id || chofer.dni });
-              if (window.localStorage) window.localStorage.removeItem('chofer_user');
-              navigation.replace('Login');
-            }}
+            onPress={cerrarSesion}
           >
             <Text style={{ fontSize: 11 }}>🚪</Text>
             <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 11 }}>Salir</Text>

@@ -748,6 +748,52 @@ app.post('/api/choferes/login', async (req, res) => {
   }
 });
 
+// Logout explícito de Chofer (Cierre de Sesión garantizado)
+app.post('/api/choferes/logout', async (req, res) => {
+  const { chofer_id, dni, numero_movil } = req.body;
+  try {
+    const parsedId = Number.isInteger(Number(chofer_id)) ? Number(chofer_id) : null;
+    const result = await db.query(
+      "UPDATE choferes SET is_online = false, estado = 'inactivo', ultima_conexion = NOW() WHERE (id = $1 AND $1 IS NOT NULL) OR dni = $2 OR numero_movil = $3 RETURNING *",
+      [parsedId, String(dni || chofer_id || ''), String(numero_movil || '')]
+    );
+
+    const chofer = result.rows.length > 0 ? result.rows[0] : null;
+    const targetId = chofer ? chofer.id : chofer_id;
+    const targetDni = chofer ? chofer.dni : dni;
+    const targetMovil = chofer ? chofer.numero_movil : numero_movil;
+
+    if (targetId && driverDisconnectTimers[targetId]) {
+      clearTimeout(driverDisconnectTimers[targetId]);
+      delete driverDisconnectTimers[targetId];
+    }
+
+    // Emitir a todos los clientes (operador, pasajeros, choferes)
+    io.emit('driver_disconnected', { 
+      chofer_id: targetId, 
+      dni: targetDni, 
+      movil: targetMovil, 
+      numero_movil: targetMovil 
+    });
+    io.emit('driver_status_changed', { 
+      chofer_id: targetId, 
+      dni: targetDni, 
+      numero_movil: targetMovil, 
+      estado: 'inactivo', 
+      isOnline: false 
+    });
+
+    for (const [sId, cId] of Object.entries(connectedDrivers)) {
+      if (cId == targetId || cId == targetDni) delete connectedDrivers[sId];
+    }
+
+    res.json({ success: true, chofer });
+  } catch (err) {
+    console.error('Error al cerrar sesión de chofer:', err);
+    res.status(500).json({ success: false, error: 'Error al cerrar sesión' });
+  }
+});
+
 // Aceptar un viaje (Chofer)
 app.post('/api/viajes/accept', async (req, res) => {
   const { viaje_id, chofer_id } = req.body;
@@ -1634,21 +1680,44 @@ io.on('connection', (socket) => {
   // Desconexión manual explícita (cuando el chofer cierra sesión o toca Desconectar)
   socket.on('manual_disconnect', async (data) => {
     const chofer_id = data.chofer_id;
-    if (chofer_id) {
-      if (driverDisconnectTimers[chofer_id]) {
-        clearTimeout(driverDisconnectTimers[chofer_id]);
-        delete driverDisconnectTimers[chofer_id];
-      }
+    const dni = data.dni;
+    const numero_movil = data.movil || data.numero_movil;
+    if (chofer_id || dni || numero_movil) {
+      const parsedId = Number.isInteger(Number(chofer_id)) ? Number(chofer_id) : null;
       try {
-        await db.query("UPDATE choferes SET is_online = false, estado = 'inactivo', ultima_conexion = NOW() WHERE id = $1 OR dni = $2", [chofer_id, String(chofer_id)]);
-        socket.broadcast.emit('driver_disconnected', { chofer_id });
-        io.emit('driver_status_changed', { chofer_id, estado: 'inactivo', isOnline: false });
+        const result = await db.query(
+          "UPDATE choferes SET is_online = false, estado = 'inactivo', ultima_conexion = NOW() WHERE (id = $1 AND $1 IS NOT NULL) OR dni = $2 OR numero_movil = $3 RETURNING *",
+          [parsedId, String(dni || chofer_id || ''), String(numero_movil || '')]
+        );
+        const chofer = result.rows.length > 0 ? result.rows[0] : null;
+        const targetId = chofer ? chofer.id : chofer_id;
+        const targetDni = chofer ? chofer.dni : dni;
+        const targetMovil = chofer ? chofer.numero_movil : numero_movil;
+
+        if (targetId && driverDisconnectTimers[targetId]) {
+          clearTimeout(driverDisconnectTimers[targetId]);
+          delete driverDisconnectTimers[targetId];
+        }
+
+        io.emit('driver_disconnected', { 
+          chofer_id: targetId, 
+          dni: targetDni, 
+          movil: targetMovil, 
+          numero_movil: targetMovil 
+        });
+        io.emit('driver_status_changed', { 
+          chofer_id: targetId, 
+          dni: targetDni, 
+          numero_movil: targetMovil, 
+          estado: 'inactivo', 
+          isOnline: false 
+        });
+
+        for (const [sId, cId] of Object.entries(connectedDrivers)) {
+          if (cId == targetId || cId == targetDni) delete connectedDrivers[sId];
+        }
       } catch (e) {
         console.error('Error al desconectar chofer manualmente:', e);
-      }
-      // Buscar en connectedDrivers si el socket corresponde
-      for (const [sId, cId] of Object.entries(connectedDrivers)) {
-        if (cId == chofer_id) delete connectedDrivers[sId];
       }
     }
   });

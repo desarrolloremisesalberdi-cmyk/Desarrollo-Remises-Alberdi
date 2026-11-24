@@ -88,8 +88,17 @@ function DashboardMap() {
 
     socket.on('driver_disconnected', (data) => {
       setActiveDrivers((prev) => {
-        const targetKey = Object.keys(prev).find((k) => String(k) === String(data.chofer_id));
-        if (!targetKey) return prev;
+        const targetKey = Object.keys(prev).find((k) => {
+          const d = prev[k];
+          return (
+            String(k) === String(data.chofer_id) ||
+            (data.chofer_id && String(d.chofer_id) === String(data.chofer_id)) ||
+            (data.dni && String(d.dni) === String(data.dni)) ||
+            (data.movil && String(d.movil) === String(data.movil)) ||
+            (data.numero_movil && String(d.movil) === String(data.numero_movil))
+          );
+        });
+        if (!targetKey || !prev[targetKey]) return prev;
         return {
           ...prev,
           [targetKey]: {
@@ -107,17 +116,20 @@ function DashboardMap() {
           const d = prev[k];
           return (
             String(k) === String(data.chofer_id) ||
+            (data.chofer_id && String(d.chofer_id) === String(data.chofer_id)) ||
             (data.dni && String(d.dni) === String(data.dni)) ||
-            (data.numero_movil && String(d.movil) === String(data.numero_movil))
+            (data.numero_movil && String(d.movil) === String(data.numero_movil)) ||
+            (data.movil && String(d.movil) === String(data.movil))
           );
         });
-        if (!targetKey) return prev;
+        if (!targetKey || !prev[targetKey]) return prev;
+        const isOffline = data.estado === 'inactivo' || data.isOnline === false;
         return {
           ...prev,
           [targetKey]: {
             ...prev[targetKey],
-            estado: data.estado || 'libre',
-            isOnline: data.isOnline !== undefined ? data.isOnline : prev[targetKey].isOnline
+            estado: data.estado || (isOffline ? 'inactivo' : 'libre'),
+            isOnline: isOffline ? false : (data.isOnline !== undefined ? data.isOnline : prev[targetKey].isOnline)
           }
         };
       });
