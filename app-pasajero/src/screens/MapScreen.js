@@ -896,7 +896,7 @@ export default function MapScreen({ route, navigation }) {
               style={{ width: 60, height: 60, borderRadius: 30, alignSelf: 'center', marginBottom: 10, borderWidth: 2, borderColor: theme.accent }}
             />
           )}
-          <Text style={[styles.statusText, { color: theme.accent }]}>{estadoViaje}</Text>
+          <Text style={[styles.statusText, { color: '#ffffff', lineHeight: 22 }]}>{estadoViaje}</Text>
           {mensajeEspera && (
             <Text style={{ marginTop: 10, color: '#f59e0b', fontWeight: 'bold', textAlign: 'center' }}>
               ⏳ {mensajeEspera}
@@ -1318,7 +1318,7 @@ export default function MapScreen({ route, navigation }) {
             
             <View style={{ alignItems: 'center', marginBottom: 14 }}>
               <Text style={{ fontSize: 26, marginBottom: 4 }}>📍</Text>
-              <Text style={{ fontSize: 19, fontWeight: '900', color: theme.text, textAlign: 'center', letterSpacing: -0.3 }}>
+              <Text style={{ fontSize: 19, fontWeight: '900', color: '#ffffff', textAlign: 'center', letterSpacing: -0.3 }}>
                 Viaje Fuera de Casilda
               </Text>
               <Text style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
@@ -1543,7 +1543,7 @@ export default function MapScreen({ route, navigation }) {
                 ) : (
                   <View style={{ padding: 25, alignItems: 'center' }}>
                     <Text style={{ fontSize: 28, marginBottom: 8 }}>⏳</Text>
-                    <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 15, textAlign: 'center' }}>
+                    <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 15, textAlign: 'center' }}>
                       No hay choferes libres en este momento
                     </Text>
                     <Text style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 6 }}>
@@ -1606,7 +1606,7 @@ export default function MapScreen({ route, navigation }) {
               {tabCostos === 'simulador' ? (
                 <View>
                   <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)', borderColor: 'rgba(59, 130, 246, 0.3)', borderWidth: 1, padding: 15, borderRadius: 14, marginBottom: 16 }}>
-                    <Text style={{ color: theme.text, fontWeight: 'bold', marginBottom: 12, fontSize: 15 }}>
+                    <Text style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: 12, fontSize: 15 }}>
                       Calcular costo estimado de viaje
                     </Text>
                     
@@ -1642,7 +1642,7 @@ export default function MapScreen({ route, navigation }) {
                       </Text>
                     ) : (
                       <View style={{ marginTop: 10, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 10 }}>
-                        <Text style={{ color: theme.text, fontSize: 13, marginBottom: 8 }}>
+                        <Text style={{ color: '#f8fafc', fontSize: 13, marginBottom: 8 }}>
                           Distancia calculada: {(calcularDistancia(
                             (coordsOrigenSim || coordsOrigen).lat, 
                             (coordsOrigenSim || coordsOrigen).lng, 
@@ -1670,7 +1670,7 @@ export default function MapScreen({ route, navigation }) {
 
                   {destinosFijos && destinosFijos.length > 0 && (
                     <View style={{ marginTop: 10 }}>
-                      <Text style={{ color: theme.text, marginBottom: 10, fontWeight: 'bold', fontSize: 14 }}>
+                      <Text style={{ color: '#ffffff', marginBottom: 10, fontWeight: 'bold', fontSize: 14 }}>
                         Destinos Fijos / Larga Distancia:
                       </Text>
                       {destinosFijos.map((destino) => (
@@ -1692,7 +1692,7 @@ export default function MapScreen({ route, navigation }) {
                             pedirLargaDistancia(destino);
                           }}
                         >
-                          <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>{destino.nombre_destino || destino.nombre}</Text>
+                          <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>{destino.nombre_destino || destino.nombre}</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 16 }}>${destino.precio_fijo || destino.precio}</Text>
                             <Text style={{ color: '#3b82f6', fontSize: 12 }}>Pedir ➔</Text>
@@ -1708,26 +1708,26 @@ export default function MapScreen({ route, navigation }) {
                     <View style={{ gap: 14 }}>
                       <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}>
                         <Text style={{ color: '#38bdf8', fontWeight: 'bold', fontSize: 15, marginBottom: 6 }}>☀️ Tarifa Diurna (6:00 a 22:00)</Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Bajada de bandera: <Text style={{ fontWeight: 'bold' }}>${tarifas.bajada_bandera_diurna}</Text></Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Cada 100 metros: <Text style={{ fontWeight: 'bold' }}>${tarifas.precio_100m_diurna}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Bajada de bandera: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.bajada_bandera_diurna}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Cada 100 metros: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.precio_100m_diurna}</Text></Text>
                       </View>
                       
                       <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}>
                         <Text style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 15, marginBottom: 6 }}>🌙 Tarifa Nocturna y Feriados (22:00 a 6:00)</Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Bajada de bandera: <Text style={{ fontWeight: 'bold' }}>${tarifas.bajada_bandera_nocturna}</Text></Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Cada 100 metros: <Text style={{ fontWeight: 'bold' }}>${tarifas.precio_100m_nocturna}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Bajada de bandera: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.bajada_bandera_nocturna}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Cada 100 metros: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.precio_100m_nocturna}</Text></Text>
                       </View>
                       
                       <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#10b981' }}>
                         <Text style={{ color: '#10b981', fontWeight: 'bold', fontSize: 15, marginBottom: 6 }}>👴 Jubilados y Pensionados (Tarifa Social)</Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Bajada de bandera: <Text style={{ fontWeight: 'bold' }}>${tarifas.bajada_bandera_jubilados}</Text></Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Cada 100 metros: <Text style={{ fontWeight: 'bold' }}>${tarifas.precio_100m_jubilados}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Bajada de bandera: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.bajada_bandera_jubilados}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Cada 100 metros: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.precio_100m_jubilados}</Text></Text>
                       </View>
                       
                       <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}>
                         <Text style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: 15, marginBottom: 6 }}>⏱️ Adicionales</Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Hora de Espera: <Text style={{ fontWeight: 'bold' }}>${tarifas.precio_espera_hora}</Text> (fraccionada cada 10 min)</Text>
-                        <Text style={{ color: theme.text, fontSize: 14 }}>• Km extra fuera de la ciudad: <Text style={{ fontWeight: 'bold' }}>${tarifas.precio_km_extra || 1100}</Text></Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Hora de Espera: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.precio_espera_hora}</Text> (fraccionada cada 10 min)</Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 14 }}>• Km extra fuera de la ciudad: <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>${tarifas.precio_km_extra || 1100}</Text></Text>
                       </View>
                     </View>
                   ) : (
@@ -1751,10 +1751,10 @@ export default function MapScreen({ route, navigation }) {
       <Modal visible={!!paymentData} transparent={true} animationType="slide">
         <View style={{flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.8)'}}>
           <View style={{margin: 20, backgroundColor: theme.cardBg, borderRadius: 12, padding: 20, alignItems: 'center'}}>
-            <Text style={{fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 10}}>Viaje Finalizado</Text>
-            <Text style={{fontSize: 18, color: theme.text, marginBottom: 20}}>Monto a pagar: <Text style={{fontWeight: 'bold', color: '#10b981'}}>${paymentData?.monto}</Text></Text>
+            <Text style={{fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 10}}>Viaje Finalizado</Text>
+            <Text style={{fontSize: 18, color: '#f8fafc', marginBottom: 20}}>Monto a pagar: <Text style={{fontWeight: 'bold', color: '#10b981'}}>${paymentData?.monto}</Text></Text>
             
-            <Text style={{fontSize: 16, color: theme.text, marginBottom: 15, textAlign: 'center'}}>Por favor, selecciona tu método de pago:</Text>
+            <Text style={{fontSize: 16, color: '#f8fafc', marginBottom: 15, textAlign: 'center'}}>Por favor, selecciona tu método de pago:</Text>
             
             <View style={{width: '100%', marginBottom: 20}}>
               <View style={{backgroundColor: '#1f2937', padding: 15, borderRadius: 8, marginBottom: 10}}>
@@ -1786,22 +1786,22 @@ export default function MapScreen({ route, navigation }) {
       <Modal visible={modalHistorial} transparent={true} animationType="slide">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ width: '90%', maxWidth: 500, backgroundColor: theme.cardBg, borderRadius: 20, padding: 25, maxHeight: '90%' }}>
-            <Text style={[styles.title, { color: theme.text, textAlign: 'center', marginBottom: 15 }]}>Mi Historial de Viajes</Text>
+            <Text style={[styles.title, { color: '#ffffff', textAlign: 'center', marginBottom: 15 }]}>Mi Historial de Viajes</Text>
             
             {loadingHistorial ? (
               <ActivityIndicator size="large" color={theme.accent} />
             ) : (
               <ScrollView style={{ maxHeight: 400 }}>
                 {historialViajes.length === 0 ? (
-                  <Text style={{ color: theme.placeholder, textAlign: 'center', marginTop: 20 }}>No tienes viajes registrados aún.</Text>
+                  <Text style={{ color: '#94a3b8', textAlign: 'center', marginTop: 20 }}>No tienes viajes registrados aún.</Text>
                 ) : (
                   historialViajes.map(viaje => (
                     <View key={viaje.id} style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 10 }}>
-                      <Text style={{ color: theme.text, fontWeight: 'bold' }}>{new Date(viaje.fecha || viaje.hora_fin).toLocaleString()}</Text>
-                      <Text style={{ color: theme.text, marginTop: 5 }}>Chofer: {viaje.chofer_nombre} {viaje.chofer_apellido}</Text>
-                      <Text style={{ color: theme.text }}>Vehículo: {viaje.vehiculo_modelo} - {viaje.vehiculo_patente}</Text>
+                      <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>{new Date(viaje.fecha || viaje.hora_fin).toLocaleString()}</Text>
+                      <Text style={{ color: '#f8fafc', marginTop: 5 }}>Chofer: {viaje.chofer_nombre} {viaje.chofer_apellido}</Text>
+                      <Text style={{ color: '#cbd5e1' }}>Vehículo: {viaje.vehiculo_modelo} - {viaje.vehiculo_patente}</Text>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                        <Text style={{ color: theme.text }}>Monto:</Text>
+                        <Text style={{ color: '#cbd5e1' }}>Monto:</Text>
                         <Text style={{ color: '#10b981', fontWeight: 'bold' }}>${viaje.monto_calculado}</Text>
                       </View>
                     </View>
