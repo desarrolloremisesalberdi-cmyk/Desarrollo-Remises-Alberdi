@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/logo-alberdi.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0b1320"
-    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -59,6 +54,28 @@
           "locationAlwaysAndWhenInUsePermission": "Radio Taxis Alberdi necesita tu ubicación para asignarte viajes y guiarte hasta el pasajero mientras conduces.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": false,
+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { *; }\n-keepclassmembers class * extends androidx.room.RoomDatabase { <init>(); }\n-keep class * extends androidx.work.InputMerger { <init>(); }\n-keepattributes *Annotation*,Signature,EnclosingMethod"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0b1320",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0b1320"
+          }
         }
       ]
     ],
