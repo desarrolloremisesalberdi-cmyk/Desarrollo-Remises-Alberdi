@@ -343,6 +343,33 @@ export default function MainScreen({ route, navigation }) {
     return () => clearInterval(heartbeat);
   }, [chofer, isOnline, activeTrip, viajeTelefonicoActivo]);
 
+  // Mantener la pantalla encendida automáticamente en navegadores móviles (Wake Lock API)
+  useEffect(() => {
+    let wakeLock = null;
+    const requestWakeLock = async () => {
+      if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (isOnline || activeTrip || viajeTelefonicoActivo)) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (e) {}
+      }
+    };
+    requestWakeLock();
+
+    const handleVis = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVis);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVis);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, [isOnline, activeTrip, viajeTelefonicoActivo]);
+
   useEffect(() => {
     let watchId = null;
 

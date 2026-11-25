@@ -3,10 +3,45 @@ import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Alert, AppSta
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { io } from 'socket.io-client';
 import { obtenerRutaGuiada, calcularEstadoNavegacionEnVivo, formatearDistancia } from '../utils/guidedNavigation';
 
 const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
+const LOCATION_BACKGROUND_TASK = 'ALBERDI_DRIVER_BACKGROUND_LOCATION';
+
+// Variables de sincronización para que la tarea nativa en segundo plano acceda al socket y chofer
+let globalSocket = null;
+let globalChofer = null;
+let globalActiveTrip = null;
+let globalViajeTelefonico = null;
+
+if (!TaskManager.isTaskDefined(LOCATION_BACKGROUND_TASK)) {
+  TaskManager.defineTask(LOCATION_BACKGROUND_TASK, ({ data, error }) => {
+    if (error) {
+      console.log('Error en tarea nativa de ubicación en segundo plano:', error);
+      return;
+    }
+    if (data && data.locations && data.locations.length > 0) {
+      const loc = data.locations[0];
+      const { latitude, longitude } = loc.coords;
+      if (globalSocket && globalChofer) {
+        const ocupado = Boolean(globalActiveTrip || globalViajeTelefonico);
+        globalSocket.emit('update_location', {
+          chofer_id: globalChofer.id,
+          dni: globalChofer.dni,
+          movil: globalChofer.numero_movil,
+          isOnline: !ocupado,
+          estado: ocupado ? 'ocupado' : 'libre',
+          lat: latitude,
+          lng: longitude,
+          foto_url: globalChofer.foto_url || null,
+        });
+      }
+    }
+  });
+}
 
 export default function MainScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -68,6 +103,26 @@ export default function MainScreen({ route, navigation }) {
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { activeTripRef.current = activeTrip; }, [activeTrip]);
   useEffect(() => { viajeTelefonicoRef.current = viajeTelefonicoActivo; }, [viajeTelefonicoActivo]);
+
+  // Sincronizar referencias para la tarea de segundo plano nativa
+  useEffect(() => {
+    globalSocket = socket;
+    globalChofer = chofer;
+    globalActiveTrip = activeTrip;
+    globalViajeTelefonico = viajeTelefonicoActivo;
+  }, [socket, chofer, activeTrip, viajeTelefonicoActivo]);
+
+  // Mantener la pantalla encendida automáticamente mientras el chofer esté de turno en el soporte
+  useEffect(() => {
+    if (isOnline || activeTrip || viajeTelefonicoActivo) {
+      activateKeepAwakeAsync('ALBERDI_DRIVER_WAKE').catch(() => {});
+    } else {
+      deactivateKeepAwake('ALBERDI_DRIVER_WAKE');
+    }
+    return () => {
+      deactivateKeepAwake('ALBERDI_DRIVER_WAKE');
+    };
+  }, [isOnline, activeTrip, viajeTelefonicoActivo]);
 
   const cargarRecaudacionHoy = async () => {
     if (!chofer?.id || chofer.id === 'sim-native') return;
@@ -392,10 +447,33 @@ export default function MainScreen({ route, navigation }) {
     
     (async () => {
       if (isOnline || activeTrip || viajeTelefonicoActivo) {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
+        let { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus !== 'granted') {
           Alert.alert('Error', 'Se requiere permiso de ubicación para trabajar');
           return;
+        }
+
+        // Solicitar permisos de fondo y activar Foreground Service para que funcione con pantalla bloqueada
+        try {
+          const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (bgStatus === 'granted') {
+            const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_BACKGROUND_TASK);
+            if (!hasStarted) {
+              await Location.startLocationUpdatesAsync(LOCATION_BACKGROUND_TASK, {
+                accuracy: Location.Accuracy.High,
+                timeInterval: 4000,
+                distanceInterval: 5,
+                showsBackgroundLocationIndicator: true,
+                foregroundService: {
+                  notificationTitle: 'Radio Taxis Alberdi - Chofer',
+                  notificationBody: 'Turno activo: transmitiendo GPS en tiempo real',
+                  notificationColor: '#10b981',
+                },
+              });
+            }
+          }
+        } catch (bgErr) {
+          console.log('Aviso background location:', bgErr);
         }
 
         const ocupadoActual = Boolean(activeTrip || viajeTelefonicoActivo);
@@ -475,6 +553,12 @@ export default function MainScreen({ route, navigation }) {
         if (subscription) {
           subscription.remove();
         }
+        try {
+          const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_BACKGROUND_TASK);
+          if (hasStarted) {
+            await Location.stopLocationUpdatesAsync(LOCATION_BACKGROUND_TASK);
+          }
+        } catch (e) {}
         if (socket && chofer) {
           socket.emit('update_location', {
             chofer_id: chofer.id,

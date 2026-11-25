@@ -10,6 +10,11 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.radiotaxisalberdi.pasajero",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBTsDYbXBONhz4OlA4dXEVvav16bkIQ2to"
@@ -26,7 +31,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Radio Taxis Alberdi necesita acceder a tu ubicación para definir el punto de partida de tu viaje."
+        }
+      ]
     ]
   }
 }
