@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Alert, useColorScheme, Image } from 'react-native';
 import { io } from 'socket.io-client';
-import { obtenerRutaGuiada, calcularEstadoNavegacionEnVivo, formatearDistancia } from '../utils/guidedNavigation';
+import { obtenerRutaGuiada, calcularEstadoNavegacionEnVivo, formatearDistancia, calcularDistanciaMetros } from '../utils/guidedNavigation';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
@@ -13,6 +13,7 @@ export default function MainScreen({ route, navigation }) {
   const [incomingRide, setIncomingRide] = useState(null);
   const [activeTrip, setActiveTrip] = useState(null);
   const [location, setLocation] = useState(() => route?.params?.initialLocation || { latitude: -33.044167, longitude: -61.168056 });
+  const [mapCenter, setMapCenter] = useState(() => route?.params?.initialLocation || { latitude: -33.044167, longitude: -61.168056 });
   const [confirmadoJubilado, setConfirmadoJubilado] = useState(false);
   const [recaudacionHoy, setRecaudacionHoy] = useState(0);
   const [enEspera, setEnEspera] = useState(false);
@@ -55,6 +56,8 @@ export default function MainScreen({ route, navigation }) {
           const coords = { latitude, longitude };
           locationRef.current = coords;
           setLocation(coords);
+          mapCenterRef.current = coords;
+          setMapCenter(coords);
           const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
           socket.emit('update_location', {
             chofer_id: chofer.id || 'sim-1',
@@ -87,11 +90,13 @@ export default function MainScreen({ route, navigation }) {
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const locationRef = useRef(location);
+  const mapCenterRef = useRef(mapCenter);
   const isOnlineRef = useRef(isOnline);
   const activeTripRef = useRef(activeTrip);
   const viajeTelefonicoRef = useRef(viajeTelefonicoActivo);
 
   useEffect(() => { locationRef.current = location; }, [location]);
+  useEffect(() => { mapCenterRef.current = mapCenter; }, [mapCenter]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { activeTripRef.current = activeTrip; }, [activeTrip]);
   useEffect(() => { viajeTelefonicoRef.current = viajeTelefonicoActivo; }, [viajeTelefonicoActivo]);
@@ -366,6 +371,8 @@ export default function MainScreen({ route, navigation }) {
             const coords = { latitude, longitude };
             locationRef.current = coords;
             setLocation(coords);
+            mapCenterRef.current = coords;
+            setMapCenter(coords);
             const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
             socket.emit('update_location', {
               chofer_id: chofer.id || 'sim-1',
@@ -389,6 +396,22 @@ export default function MainScreen({ route, navigation }) {
             const coords = { latitude, longitude };
             locationRef.current = coords;
             setLocation(coords);
+
+            // Estabilizar el mapa web: sólo recentramos el iframe si el chofer se movió más de 200m
+            // para evitar que el iframe de Google Maps se recargue y titile con cada micro-pulso de GPS
+            if (!activeTripRef.current && mapCenterRef.current) {
+              const dist = calcularDistanciaMetros(
+                mapCenterRef.current.latitude,
+                mapCenterRef.current.longitude,
+                latitude,
+                longitude
+              );
+              if (dist >= 200) {
+                mapCenterRef.current = coords;
+                setMapCenter(coords);
+              }
+            }
+
             const ocupado = Boolean(activeTripRef.current || viajeTelefonicoRef.current);
             socket.emit('update_location', {
               chofer_id: chofer.id || 'sim-1',
@@ -754,16 +777,34 @@ export default function MainScreen({ route, navigation }) {
     }
   };
 
+  const mapEmbedUrl = useMemo(() => {
+    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+    if (activeTrip && guidedRoute) {
+      const oLat = guidedRoute.origenLat || mapCenter?.latitude || -33.044167;
+      const oLng = guidedRoute.origenLng || mapCenter?.longitude || -61.168056;
+      return `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${oLat},${oLng}&destination=${guidedRoute.destinoLat},${guidedRoute.destinoLng}&mode=driving`;
+    }
+    const cLat = mapCenter?.latitude || -33.044167;
+    const cLng = mapCenter?.longitude || -61.168056;
+    return `https://www.google.com/maps/embed/v1/view?key=${apiKey}&center=${cLat},${cLng}&zoom=16&maptype=roadmap`;
+  }, [
+    Boolean(activeTrip),
+    activeTrip?.id,
+    activeTrip?.estado,
+    guidedRoute?.origenLat,
+    guidedRoute?.origenLng,
+    guidedRoute?.destinoLat,
+    guidedRoute?.destinoLng,
+    mapCenter?.latitude,
+    mapCenter?.longitude
+  ]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={[styles.mapPlaceholder, { backgroundColor: theme.cardBg, position: 'relative', overflow: 'hidden' }]}>
         <iframe 
           title="Mapa de Casilda"
-          src={
-            activeTrip && guidedRoute
-              ? `https://www.google.com/maps/embed/v1/directions?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&origin=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&destination=${guidedRoute.destinoLat},${guidedRoute.destinoLng}&mode=driving`
-              : `https://www.google.com/maps/embed/v1/view?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${location ? `${location.latitude},${location.longitude}` : '-33.044167,-61.168056'}&zoom=16&maptype=roadmap`
-          }
+          src={mapEmbedUrl}
           style={{ width: '100%', height: '100%', border: 0 }}
         />
 

@@ -131,6 +131,8 @@ export async function obtenerRutaGuiada(origenLat, origenLng, destinoLat, destin
       totalDurationSeconds: Math.round(route.duration || 0),
       steps,
       targetLabel,
+      origenLat: oLat,
+      origenLng: oLng,
       destinoLat: dLat,
       destinoLng: dLng,
     };
@@ -176,6 +178,8 @@ function crearRutaDirectaFallback(oLat, oLng, dLat, dLng, targetLabel) {
       },
     ],
     targetLabel,
+    origenLat: oLat,
+    origenLng: oLng,
     destinoLat: dLat,
     destinoLng: dLng,
   };
