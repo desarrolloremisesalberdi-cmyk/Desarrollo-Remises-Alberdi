@@ -17,30 +17,36 @@ let globalChofer = null;
 let globalActiveTrip = null;
 let globalViajeTelefonico = null;
 
-if (!TaskManager.isTaskDefined(LOCATION_BACKGROUND_TASK)) {
-  TaskManager.defineTask(LOCATION_BACKGROUND_TASK, ({ data, error }) => {
-    if (error) {
-      console.log('Error en tarea nativa de ubicación en segundo plano:', error);
-      return;
+try {
+  if (TaskManager && typeof TaskManager.isTaskDefined === 'function') {
+    if (!TaskManager.isTaskDefined(LOCATION_BACKGROUND_TASK)) {
+      TaskManager.defineTask(LOCATION_BACKGROUND_TASK, ({ data, error }) => {
+        if (error) {
+          console.log('Error en tarea nativa de ubicación en segundo plano:', error);
+          return;
+        }
+        if (data && data.locations && data.locations.length > 0) {
+          const loc = data.locations[0];
+          const { latitude, longitude } = loc.coords;
+          if (globalSocket && globalChofer) {
+            const ocupado = Boolean(globalActiveTrip || globalViajeTelefonico);
+            globalSocket.emit('update_location', {
+              chofer_id: globalChofer.id,
+              dni: globalChofer.dni,
+              movil: globalChofer.numero_movil,
+              isOnline: !ocupado,
+              estado: ocupado ? 'ocupado' : 'libre',
+              lat: latitude,
+              lng: longitude,
+              foto_url: globalChofer.foto_url || null,
+            });
+          }
+        }
+      });
     }
-    if (data && data.locations && data.locations.length > 0) {
-      const loc = data.locations[0];
-      const { latitude, longitude } = loc.coords;
-      if (globalSocket && globalChofer) {
-        const ocupado = Boolean(globalActiveTrip || globalViajeTelefonico);
-        globalSocket.emit('update_location', {
-          chofer_id: globalChofer.id,
-          dni: globalChofer.dni,
-          movil: globalChofer.numero_movil,
-          isOnline: !ocupado,
-          estado: ocupado ? 'ocupado' : 'libre',
-          lat: latitude,
-          lng: longitude,
-          foto_url: globalChofer.foto_url || null,
-        });
-      }
-    }
-  });
+  }
+} catch (taskErr) {
+  console.log('Aviso al definir tarea nativa de fondo:', taskErr);
 }
 
 export default function MainScreen({ route, navigation }) {
@@ -114,13 +120,21 @@ export default function MainScreen({ route, navigation }) {
 
   // Mantener la pantalla encendida automáticamente mientras el chofer esté de turno en el soporte
   useEffect(() => {
-    if (isOnline || activeTrip || viajeTelefonicoActivo) {
-      activateKeepAwakeAsync('ALBERDI_DRIVER_WAKE').catch(() => {});
-    } else {
-      deactivateKeepAwake('ALBERDI_DRIVER_WAKE');
-    }
+    try {
+      if (typeof activateKeepAwakeAsync === 'function') {
+        if (isOnline || activeTrip || viajeTelefonicoActivo) {
+          activateKeepAwakeAsync('ALBERDI_DRIVER_WAKE').catch(() => {});
+        } else {
+          deactivateKeepAwake('ALBERDI_DRIVER_WAKE');
+        }
+      }
+    } catch (e) {}
     return () => {
-      deactivateKeepAwake('ALBERDI_DRIVER_WAKE');
+      try {
+        if (typeof deactivateKeepAwake === 'function') {
+          deactivateKeepAwake('ALBERDI_DRIVER_WAKE');
+        }
+      } catch (e) {}
     };
   }, [isOnline, activeTrip, viajeTelefonicoActivo]);
 
