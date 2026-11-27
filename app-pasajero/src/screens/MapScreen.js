@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image, TextInput, ActivityIndicator, Vibration, Alert, Modal, ScrollView, Linking } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, useColorScheme, Image, TextInput, ActivityIndicator, Vibration, Alert, Modal, ScrollView, Linking, Keyboard, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import * as Location from 'expo-location';
@@ -152,7 +152,65 @@ export default function MapScreen({ route, navigation }) {
   const [coordsDestino, setCoordsDestino] = useState(null);
   const [obteniendoUbicacion, setObteniendoUbicacion] = useState(false);
   const [usandoUbicacionActual, setUsandoUbicacionActual] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const origenRef = React.useRef(null);
+  const destinoRef = React.useRef(null);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setIsKeyboardVisible(true);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+        setIsKeyboardVisible(false);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const resolverGeocodificacion = async (direccion) => {
+    if (!direccion || !direccion.trim()) return null;
+    const query = direccion.trim();
+    try {
+      const dirCompleta = query.toLowerCase().includes('casilda') 
+        ? query 
+        : `${query}, Casilda, Santa Fe, Argentina`;
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(dirCompleta)}&key=${GOOGLE_MAPS_API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const item = data.results[0];
+        const { lat, lng } = item.geometry.location;
+        return {
+          lat,
+          lng,
+          formattedAddress: item.formatted_address || query
+        };
+      }
+
+      const expoRes = await Location.geocodeAsync(dirCompleta);
+      if (expoRes && expoRes.length > 0) {
+        return {
+          lat: expoRes[0].latitude,
+          lng: expoRes[0].longitude,
+          formattedAddress: query
+        };
+      }
+    } catch (e) {
+      console.warn('Error resolviendo geocodificación:', e);
+    }
+    return null;
+  };
 
   const obtenerUbicacionActual = async () => {
     setObteniendoUbicacion(true);
@@ -268,16 +326,62 @@ export default function MapScreen({ route, navigation }) {
   };
 
   const iniciarPedidoTaxi = async () => {
-    if (!coordsOrigen) {
+    Keyboard.dismiss();
+    let cOrigen = coordsOrigen;
+    let cDestino = coordsDestino;
+
+    // Si escribió un punto de partida pero no lo seleccionó del desplegable
+    if (!cOrigen && origenTexto && origenTexto.trim().length > 0) {
+      setSolicitando(true);
+      const geoOrigen = await resolverGeocodificacion(origenTexto.trim());
+      setSolicitando(false);
+      if (geoOrigen) {
+        cOrigen = { lat: geoOrigen.lat, lng: geoOrigen.lng };
+        setCoordsOrigen(cOrigen);
+        setOrigenTexto(geoOrigen.formattedAddress);
+        if (origenRef.current) origenRef.current.setAddressText(geoOrigen.formattedAddress);
+      }
+    }
+
+    if (!cOrigen) {
       Alert.alert('Punto de partida requerido', 'Por favor selecciona tu origen o presiona "📍 Usar mi ubicación actual"');
       return;
     }
-    if (!coordsDestino) {
+
+    // Si escribió el destino (ej: "Roca 1555") pero no seleccionó de la lista desplegable
+    if (!cDestino && destinoTexto && destinoTexto.trim().length > 0) {
+      setSolicitando(true);
+      const geoDestino = await resolverGeocodificacion(destinoTexto.trim());
+      setSolicitando(false);
+      if (geoDestino) {
+        cDestino = { lat: geoDestino.lat, lng: geoDestino.lng };
+        setCoordsDestino(cDestino);
+        setDestinoTexto(geoDestino.formattedAddress);
+        if (destinoRef.current) destinoRef.current.setAddressText(geoDestino.formattedAddress);
+        if (mapRef.current) {
+          mapRef.current.fitToCoordinates([
+            { latitude: cOrigen.lat, longitude: cOrigen.lng },
+            { latitude: geoDestino.lat, longitude: geoDestino.lng }
+          ], {
+            edgePadding: { top: 120, right: 60, bottom: 380, left: 60 },
+            animated: true,
+          });
+        }
+      } else {
+        Alert.alert(
+          'Destino no encontrado',
+          `No pudimos ubicar con exactitud "${destinoTexto}". Por favor selecciona una de las opciones sugeridas al escribir.`
+        );
+        return;
+      }
+    }
+
+    if (!cDestino) {
       Alert.alert('Destino requerido', 'Por favor busca y selecciona tu destino en "¿A dónde vas?"');
       return;
     }
 
-    const fuera = esFueraDeCasilda(coordsOrigen, origenTexto);
+    const fuera = esFueraDeCasilda(cOrigen, origenTexto);
     setEsViajeFueraCasilda(fuera);
 
     if (fuera) {
@@ -886,6 +990,7 @@ export default function MapScreen({ route, navigation }) {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
+        onPanDrag={() => Keyboard.dismiss()}
         initialRegion={{
           latitude: -33.044167,
           longitude: -61.168056,
@@ -943,55 +1048,97 @@ export default function MapScreen({ route, navigation }) {
         </View>
       )}
       
-      <View style={[styles.bottomCard, { backgroundColor: theme.cardBg, paddingBottom: Math.max(insets.bottom + 20, 48) }]}>
-        {/* Barra superior estilizada tipo bottom-sheet */}
-        <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 14 }} />
+      <View 
+        style={[
+          styles.bottomCard, 
+          { 
+            backgroundColor: theme.cardBg, 
+            ...(isKeyboardVisible ? {
+              top: insets.top + 45,
+              bottom: keyboardHeight,
+              paddingBottom: 10,
+              borderTopWidth: 1.5,
+              borderBottomWidth: 1,
+              borderColor: 'rgba(16, 185, 129, 0.45)',
+            } : {
+              bottom: 0,
+              paddingBottom: Math.max(insets.bottom + 20, 48),
+            })
+          }
+        ]}
+      >
+        {/* Barra superior con botón para cerrar el teclado cuando se escribe */}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: isKeyboardVisible ? 'space-between' : 'center',
+          marginBottom: isKeyboardVisible ? 10 : 14 
+        }}>
+          {isKeyboardVisible ? (
+            <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '800', letterSpacing: 0.3 }}>
+              📍 BUSCAR DIRECCIÓN
+            </Text>
+          ) : null}
+          
+          <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center' }} />
+
+          {isKeyboardVisible && (
+            <TouchableOpacity 
+              onPress={() => Keyboard.dismiss()}
+              style={{ paddingHorizontal: 12, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12 }}
+            >
+              <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '700' }}>Cerrar ✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {!estadoViaje && (
-          <View style={{ marginBottom: 10, zIndex: 10 }}>
-            {/* Botón Principal: Usar Mi Ubicación Actual (Dark Glassmorphism) */}
-            <TouchableOpacity 
-              style={{ 
-                backgroundColor: usandoUbicacionActual ? 'rgba(16, 185, 129, 0.16)' : 'rgba(2, 132, 199, 0.14)', 
-                borderColor: usandoUbicacionActual ? '#10b981' : 'rgba(56, 189, 248, 0.45)', 
-                borderWidth: 1.5,
-                borderRadius: 14,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                marginBottom: 14,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 9,
-              }} 
-              onPress={obtenerUbicacionActual}
-              disabled={obteniendoUbicacion}
-            >
-              {obteniendoUbicacion ? (
-                <ActivityIndicator color="#10b981" size="small" />
-              ) : (
-                <>
-                  <View style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 11,
-                    backgroundColor: usandoUbicacionActual ? '#10b981' : '#0284c7',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: 'bold' }}>{usandoUbicacionActual ? '✓' : '📍'}</Text>
-                  </View>
-                  <Text style={{
-                    color: usandoUbicacionActual ? '#34d399' : '#38bdf8',
-                    fontWeight: '800',
-                    fontSize: 14,
-                    letterSpacing: 0.3
-                  }}>
-                    {usandoUbicacionActual ? 'Mi Ubicación GPS Fijada' : 'Usar Mi Ubicación Actual'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+          <View style={{ marginBottom: 10, zIndex: 10, flex: isKeyboardVisible ? 1 : undefined }}>
+            {/* Botón Principal: Usar Mi Ubicación Actual (oculto mientras se escribe para dar espacio) */}
+            {!isKeyboardVisible && (
+              <TouchableOpacity 
+                style={{ 
+                  backgroundColor: usandoUbicacionActual ? 'rgba(16, 185, 129, 0.16)' : 'rgba(2, 132, 199, 0.14)', 
+                  borderColor: usandoUbicacionActual ? '#10b981' : 'rgba(56, 189, 248, 0.45)', 
+                  borderWidth: 1.5,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  marginBottom: 14,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 9,
+                }} 
+                onPress={obtenerUbicacionActual}
+                disabled={obteniendoUbicacion}
+              >
+                {obteniendoUbicacion ? (
+                  <ActivityIndicator color="#10b981" size="small" />
+                ) : (
+                  <>
+                    <View style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: usandoUbicacionActual ? '#10b981' : '#0284c7',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Text style={{ fontSize: 12, color: '#fff', fontWeight: 'bold' }}>{usandoUbicacionActual ? '✓' : '📍'}</Text>
+                    </View>
+                    <Text style={{
+                      color: usandoUbicacionActual ? '#34d399' : '#38bdf8',
+                      fontWeight: '800',
+                      fontSize: 14,
+                      letterSpacing: 0.3
+                    }}>
+                      {usandoUbicacionActual ? 'Mi Ubicación GPS Fijada' : 'Usar Mi Ubicación Actual'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             {/* Contenedor Ejecutivo de Ruta (Origen & Destino conectados) */}
             <View style={{
@@ -1000,13 +1147,14 @@ export default function MapScreen({ route, navigation }) {
               borderWidth: 1,
               borderColor: 'rgba(255, 255, 255, 0.08)',
               padding: 12,
-              marginBottom: 14
+              marginBottom: isKeyboardVisible ? 6 : 14,
+              flex: isKeyboardVisible ? 1 : undefined
             }}>
-              <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'stretch', flex: isKeyboardVisible ? 1 : undefined }}>
                 {/* Conector vertical didáctico */}
-                <View style={{ width: 22, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, marginRight: 8 }}>
+                <View style={{ width: 22, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 14, marginRight: 8 }}>
                   <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10b981' }} />
-                  <View style={{ flex: 1, width: 2, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 4 }} />
+                  <View style={{ height: 32, width: 2, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 4 }} />
                   <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#ef4444' }} />
                 </View>
 
@@ -1018,6 +1166,11 @@ export default function MapScreen({ route, navigation }) {
                       placeholder="¿Dónde te buscamos?"
                       fetchDetails={true}
                       enablePoweredByContainer={false}
+                      keyboardShouldPersistTaps="always"
+                      listViewProps={{
+                        keyboardShouldPersistTaps: 'always',
+                        nestedScrollEnabled: true,
+                      }}
                       debounce={300}
                       onFail={(err) => console.log('Places Origen error:', err)}
                       textInputProps={{
@@ -1025,11 +1178,24 @@ export default function MapScreen({ route, navigation }) {
                           setOrigenTexto(text);
                           if (usandoUbicacionActual) setUsandoUbicacionActual(false);
                         },
-                        placeholderTextColor: '#64748b'
+                        placeholderTextColor: '#64748b',
+                        returnKeyType: 'search',
+                        onSubmitEditing: async () => {
+                          Keyboard.dismiss();
+                          if (!coordsOrigen && origenTexto && origenTexto.trim().length > 0) {
+                            const geo = await resolverGeocodificacion(origenTexto.trim());
+                            if (geo) {
+                              setCoordsOrigen({ lat: geo.lat, lng: geo.lng });
+                              setOrigenTexto(geo.formattedAddress);
+                              if (origenRef.current) origenRef.current.setAddressText(geo.formattedAddress);
+                            }
+                          }
+                        }
                       }}
                       onPress={(data, details = null) => {
                         setUsandoUbicacionActual(false);
                         setOrigenTexto(data.description);
+                        Keyboard.dismiss();
                         if (details?.geometry?.location) {
                           const lat = details.geometry.location.lat;
                           const lng = details.geometry.location.lng;
@@ -1056,19 +1222,38 @@ export default function MapScreen({ route, navigation }) {
                     />
                   </View>
 
-                  <View style={{ zIndex: 10 }}>
+                  <View style={{ zIndex: 10, flex: isKeyboardVisible ? 1 : undefined }}>
                     <GooglePlacesAutocomplete
+                      ref={destinoRef}
                       placeholder="¿A dónde vas?"
                       fetchDetails={true}
                       enablePoweredByContainer={false}
+                      keyboardShouldPersistTaps="always"
+                      listViewProps={{
+                        keyboardShouldPersistTaps: 'always',
+                        nestedScrollEnabled: true,
+                      }}
                       debounce={300}
                       onFail={(err) => console.log('Places Destino error:', err)}
                       textInputProps={{
                         onChangeText: (text) => setDestinoTexto(text),
-                        placeholderTextColor: '#64748b'
+                        placeholderTextColor: '#64748b',
+                        returnKeyType: 'search',
+                        onSubmitEditing: async () => {
+                          Keyboard.dismiss();
+                          if (!coordsDestino && destinoTexto && destinoTexto.trim().length > 0) {
+                            const geo = await resolverGeocodificacion(destinoTexto.trim());
+                            if (geo) {
+                              setCoordsDestino({ lat: geo.lat, lng: geo.lng });
+                              setDestinoTexto(geo.formattedAddress);
+                              if (destinoRef.current) destinoRef.current.setAddressText(geo.formattedAddress);
+                            }
+                          }
+                        }
                       }}
                       onPress={(data, details = null) => {
                         setDestinoTexto(data.description);
+                        Keyboard.dismiss();
                         if (details?.geometry?.location) {
                           const destLat = details.geometry.location.lat;
                           const destLng = details.geometry.location.lng;
@@ -1108,36 +1293,38 @@ export default function MapScreen({ route, navigation }) {
               </View>
             </View>
 
-            {/* Botón Principal: Pedir Taxi Alberdi */}
-            <TouchableOpacity 
-              style={{
-                backgroundColor: '#10b981',
-                borderRadius: 16,
-                paddingVertical: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                shadowColor: '#10b981',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.45,
-                shadowRadius: 12,
-                elevation: 6
-              }} 
-              onPress={iniciarPedidoTaxi}
-              disabled={solicitando}
-            >
-              {solicitando ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={{ fontSize: 18 }}>🚖</Text>
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.8 }}>
-                    PEDIR TAXI ALBERDI
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+            {/* Botón Principal: Pedir Taxi Alberdi (visible cuando el teclado está cerrado) */}
+            {!isKeyboardVisible && (
+              <TouchableOpacity 
+                style={{
+                  backgroundColor: '#10b981',
+                  borderRadius: 16,
+                  paddingVertical: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  shadowColor: '#10b981',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.45,
+                  shadowRadius: 12,
+                  elevation: 6
+                }} 
+                onPress={iniciarPedidoTaxi}
+                disabled={solicitando}
+              >
+                {solicitando ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={{ fontSize: 18 }}>🚖</Text>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.8 }}>
+                      PEDIR TAXI ALBERDI
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -2081,6 +2268,9 @@ const lightTheme = {
 };
 
 const googlePlacesStyles = {
+  container: {
+    flex: 0,
+  },
   textInputContainer: {
     backgroundColor: 'transparent',
     borderTopWidth: 0,
@@ -2112,6 +2302,7 @@ const googlePlacesStyles = {
     borderColor: 'rgba(255, 255, 255, 0.12)',
     elevation: 8,
     zIndex: 9999,
+    maxHeight: 220,
   },
   row: {
     backgroundColor: '#1e293b',

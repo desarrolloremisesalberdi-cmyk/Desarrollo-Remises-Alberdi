@@ -394,6 +394,32 @@ export default function MapScreen({ route, navigation }) {
   const [obteniendoUbicacion, setObteniendoUbicacion] = useState(false);
   const [usandoUbicacionActual, setUsandoUbicacionActual] = useState(false);
   const origenRef = React.useRef(null);
+  const destinoRef = React.useRef(null);
+
+  const resolverGeocodificacion = async (direccion) => {
+    if (!direccion || !direccion.trim()) return null;
+    const query = direccion.trim();
+    try {
+      const dirCompleta = query.toLowerCase().includes('casilda') 
+        ? query 
+        : `${query}, Casilda, Santa Fe, Argentina`;
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(dirCompleta)}&key=${GOOGLE_MAPS_API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const item = data.results[0];
+        const { lat, lng } = item.geometry.location;
+        return {
+          lat,
+          lng,
+          formattedAddress: item.formatted_address || query
+        };
+      }
+    } catch (e) {
+      console.warn('Error resolviendo geocodificación web:', e);
+    }
+    return null;
+  };
 
   const obtenerUbicacionActual = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
@@ -459,11 +485,39 @@ export default function MapScreen({ route, navigation }) {
       alert('Error: No estás logueado en la base de datos.');
       return;
     }
-    if (!coordsOrigen) {
+
+    let cOrigen = coordsOrigen;
+    let cDestino = coordsDestino;
+
+    if (!cOrigen && origenTexto && origenTexto.trim().length > 0) {
+      const geoOrigen = await resolverGeocodificacion(origenTexto.trim());
+      if (geoOrigen) {
+        cOrigen = { lat: geoOrigen.lat, lng: geoOrigen.lng };
+        setCoordsOrigen(cOrigen);
+        setOrigenTexto(geoOrigen.formattedAddress);
+        if (origenRef.current) origenRef.current.setAddressText(geoOrigen.formattedAddress);
+      }
+    }
+
+    if (!cOrigen) {
       alert('Por favor indica tu punto de partida (o presiona "📍 Usar mi ubicación actual")');
       return;
     }
-    if (!coordsDestino) {
+
+    if (!cDestino && destinoTexto && destinoTexto.trim().length > 0) {
+      const geoDestino = await resolverGeocodificacion(destinoTexto.trim());
+      if (geoDestino) {
+        cDestino = { lat: geoDestino.lat, lng: geoDestino.lng };
+        setCoordsDestino(cDestino);
+        setDestinoTexto(geoDestino.formattedAddress);
+        if (destinoRef.current) destinoRef.current.setAddressText(geoDestino.formattedAddress);
+      } else {
+        alert(`No pudimos ubicar con exactitud "${destinoTexto}". Por favor selecciona una de las direcciones sugeridas de la lista.`);
+        return;
+      }
+    }
+
+    if (!cDestino) {
       alert('Por favor, busca y selecciona tu destino en "¿A dónde vas?"');
       return;
     }
@@ -887,9 +941,11 @@ export default function MapScreen({ route, navigation }) {
 
                   <View style={{ zIndex: 10 }}>
                     <GooglePlacesAutocomplete
+                      ref={destinoRef}
                       placeholder="¿A dónde vas?"
                       fetchDetails={true}
                       textInputProps={{
+                        onChangeText: (text) => setDestinoTexto(text),
                         placeholderTextColor: '#64748b'
                       }}
                       onPress={(data, details = null) => {
