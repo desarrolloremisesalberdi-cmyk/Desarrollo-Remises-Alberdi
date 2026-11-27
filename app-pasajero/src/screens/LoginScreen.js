@@ -9,12 +9,32 @@ export default function LoginScreen({ navigation }) {
   const [clave, setClave] = useState('');
   const [recordar, setRecordar] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [comprobandoSesion, setComprobandoSesion] = useState(true);
   const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
-    const loadCredentials = async () => {
+    const initAuth = async () => {
       try {
+        // 1. Verificar si existe sesión persistente (Móvil y Web) para evitar cierres en llamadas o segundo plano
+        const savedSession = await AsyncStorage.getItem('pasajero_session');
+        if (savedSession) {
+          const user = JSON.parse(savedSession);
+          if (user && user.id) {
+            navigation.replace('Map', { user });
+            return;
+          }
+        }
+
+        if (Platform.OS === 'web') {
+          const savedUser = localStorage.getItem('pasajero_user');
+          if (savedUser) {
+            navigation.replace('Map', { user: JSON.parse(savedUser) });
+            return;
+          }
+        }
+
+        // 2. Si no hay sesión activa, cargar credenciales recordadas si existen
         const savedId = await AsyncStorage.getItem('pasajero_id');
         const savedClave = await AsyncStorage.getItem('pasajero_clave');
         if (savedId && savedClave) {
@@ -24,16 +44,11 @@ export default function LoginScreen({ navigation }) {
         }
       } catch (e) {
         // Ignorar error
+      } finally {
+        setComprobandoSesion(false);
       }
     };
-    loadCredentials();
-
-    if (Platform.OS === 'web') {
-      const savedUser = localStorage.getItem('pasajero_user');
-      if (savedUser) {
-        navigation.replace('Map', { user: JSON.parse(savedUser) });
-      }
-    }
+    initAuth();
   }, []);
 
   const handleLogin = async () => {
@@ -53,6 +68,9 @@ export default function LoginScreen({ navigation }) {
       const data = await response.json();
       
       if (data.success) {
+        // Guardar sesión activa persistente del pasajero
+        await AsyncStorage.setItem('pasajero_session', JSON.stringify(data.user));
+
         if (recordar) {
           await AsyncStorage.setItem('pasajero_id', identificador);
           await AsyncStorage.setItem('pasajero_clave', clave);
@@ -74,6 +92,14 @@ export default function LoginScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  if (comprobandoSesion) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.accent} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>

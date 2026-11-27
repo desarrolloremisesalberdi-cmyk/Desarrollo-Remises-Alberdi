@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { io } from 'socket.io-client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { obtenerRutaGuiada, calcularEstadoNavegacionEnVivo, formatearDistancia } from '../utils/guidedNavigation';
 
 const SOCKET_URL = 'https://desarrollo-remises-alberdi.onrender.com';
@@ -109,6 +110,29 @@ export default function MainScreen({ route, navigation }) {
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
   useEffect(() => { activeTripRef.current = activeTrip; }, [activeTrip]);
   useEffect(() => { viajeTelefonicoRef.current = viajeTelefonicoActivo; }, [viajeTelefonicoActivo]);
+
+  // Restaurar viaje activo si la app se cerró durante una llamada o uso de otra aplicación
+  useEffect(() => {
+    AsyncStorage.getItem('chofer_active_trip').then((str) => {
+      if (str) {
+        try {
+          const saved = JSON.parse(str);
+          if (saved && (saved.id || saved.viaje_id)) {
+            setActiveTrip(saved);
+          }
+        } catch (e) {}
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Persistir viaje activo para no perder el estado ante interrupciones
+  useEffect(() => {
+    if (activeTrip) {
+      AsyncStorage.setItem('chofer_active_trip', JSON.stringify(activeTrip)).catch(() => {});
+    } else {
+      AsyncStorage.removeItem('chofer_active_trip').catch(() => {});
+    }
+  }, [activeTrip]);
 
   // Sincronizar referencias para la tarea de segundo plano nativa
   useEffect(() => {
@@ -284,6 +308,13 @@ export default function MainScreen({ route, navigation }) {
   }, [chofer]);
 
   const cerrarSesion = async () => {
+    try {
+      await AsyncStorage.removeItem('chofer_session');
+      await AsyncStorage.removeItem('chofer_active_trip');
+    } catch (e) {}
+    if (Platform.OS === 'web') {
+      try { localStorage.removeItem('chofer_user'); } catch (e) {}
+    }
     try {
       await fetch(`${SOCKET_URL}/api/choferes/logout`, {
         method: 'POST',

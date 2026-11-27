@@ -54,13 +54,33 @@ export default function LoginScreen({ navigation }) {
   const [clave, setClave] = useState('');
   const [recordar, setRecordar] = useState(false);
   const [cargandoLogin, setCargandoLogin] = useState(false);
+  const [comprobandoSesion, setComprobandoSesion] = useState(true);
 
   const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
-    const loadCredentials = async () => {
+    const initAuth = async () => {
       try {
+        // 1. Verificar si existe sesión persistente del chofer (para que llamadas o segundo plano no lo deslogueen)
+        const savedChoferStr = await AsyncStorage.getItem('chofer_session');
+        if (savedChoferStr) {
+          const savedChofer = JSON.parse(savedChoferStr);
+          if (savedChofer && (savedChofer.id || savedChofer.dni)) {
+            navigation.replace('Main', { chofer: savedChofer });
+            return;
+          }
+        }
+
+        if (Platform.OS === 'web') {
+          const savedChofer = localStorage.getItem('chofer_user');
+          if (savedChofer) {
+            navigation.replace('Main', { chofer: JSON.parse(savedChofer) });
+            return;
+          }
+        }
+
+        // 2. Si no hay sesión activa, cargar credenciales recordadas
         const savedDni = await AsyncStorage.getItem('chofer_dni');
         const savedClave = await AsyncStorage.getItem('chofer_clave');
         if (savedDni && savedClave) {
@@ -70,16 +90,11 @@ export default function LoginScreen({ navigation }) {
         }
       } catch (e) {
         // Ignorar
+      } finally {
+        setComprobandoSesion(false);
       }
     };
-    loadCredentials();
-
-    if (Platform.OS === 'web') {
-      const savedChofer = localStorage.getItem('chofer_user');
-      if (savedChofer) {
-        navigation.replace('Main', { chofer: JSON.parse(savedChofer) });
-      }
-    }
+    initAuth();
   }, []);
 
   const handleLogin = async () => {
@@ -106,6 +121,15 @@ export default function LoginScreen({ navigation }) {
       const data = await response.json();
       
       if (data.success) {
+        const choferConGps = {
+          ...data.chofer,
+          lat: gpsCoords ? gpsCoords.latitude : data.chofer.lat,
+          lng: gpsCoords ? gpsCoords.longitude : data.chofer.lng,
+        };
+
+        // Guardar sesión activa persistente del chofer (para que llamadas u otras apps no cierren la sesión)
+        await AsyncStorage.setItem('chofer_session', JSON.stringify(choferConGps));
+
         if (recordar) {
           await AsyncStorage.setItem('chofer_dni', dni.trim());
           await AsyncStorage.setItem('chofer_clave', clave);
@@ -113,12 +137,6 @@ export default function LoginScreen({ navigation }) {
           await AsyncStorage.removeItem('chofer_dni');
           await AsyncStorage.removeItem('chofer_clave');
         }
-
-        const choferConGps = {
-          ...data.chofer,
-          lat: gpsCoords ? gpsCoords.latitude : data.chofer.lat,
-          lng: gpsCoords ? gpsCoords.longitude : data.chofer.lng,
-        };
 
         if (Platform.OS === 'web') {
           localStorage.setItem('chofer_user', JSON.stringify(choferConGps));
@@ -140,6 +158,14 @@ export default function LoginScreen({ navigation }) {
       setCargandoLogin(false);
     }
   };
+
+  if (comprobandoSesion) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0b1320', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.bg }]}>

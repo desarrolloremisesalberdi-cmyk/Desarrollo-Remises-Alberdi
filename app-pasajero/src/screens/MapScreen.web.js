@@ -6,6 +6,10 @@ import { io } from 'socket.io-client';
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBTsDYbXBONhz4OlA4dXEVvav16bkIQ2to';
+const CASILDA_LOCATION = '-33.044167,-61.168056';
+const CASILDA_RADIUS = 12000;
+
 export default function MapScreen({ route, navigation }) {
   const [solicitando, setSolicitando] = useState(false);
   const [estadoViaje, setEstadoViaje] = useState(null);
@@ -866,9 +870,12 @@ export default function MapScreen({ route, navigation }) {
                         setCoordsOrigen({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
                       }}
                       query={{
-                        key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                        key: GOOGLE_MAPS_API_KEY,
                         language: 'es',
                         components: 'country:ar',
+                        location: CASILDA_LOCATION,
+                        radius: CASILDA_RADIUS,
+                        strictbounds: true,
                       }}
                       requestUrl={{
                         url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps',
@@ -890,9 +897,12 @@ export default function MapScreen({ route, navigation }) {
                         setCoordsDestino({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
                       }}
                       query={{
-                        key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                        key: GOOGLE_MAPS_API_KEY,
                         language: 'es',
                         components: 'country:ar',
+                        location: CASILDA_LOCATION,
+                        radius: CASILDA_RADIUS,
+                        strictbounds: true,
                       }}
                       requestUrl={{
                         url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps',
@@ -1180,7 +1190,7 @@ export default function MapScreen({ route, navigation }) {
                         onPress={(data, details = null) => {
                           setCoordsOrigenSim({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
                         }}
-                        query={{ key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar' }}
+                        query={{ key: GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar', location: CASILDA_LOCATION, radius: CASILDA_RADIUS, strictbounds: true }}
                         requestUrl={{ url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps', useOnPlatform: 'web' }}
                         styles={{...googlePlacesStyles, textInput: {...googlePlacesStyles.textInput, height: 42}}}
                       />
@@ -1194,7 +1204,7 @@ export default function MapScreen({ route, navigation }) {
                         onPress={(data, details = null) => {
                           setCoordsDestinoSim({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
                         }}
-                        query={{ key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar' }}
+                        query={{ key: GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar', location: CASILDA_LOCATION, radius: CASILDA_RADIUS, strictbounds: true }}
                         requestUrl={{ url: 'https://desarrollo-remises-alberdi.onrender.com/api/maps', useOnPlatform: 'web' }}
                         styles={{...googlePlacesStyles, textInput: {...googlePlacesStyles.textInput, height: 42}}}
                       />

@@ -7,12 +7,16 @@ import { io } from 'socket.io-client';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 const socket = io(API_URL);
 
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBTsDYbXBONhz4OlA4dXEVvav16bkIQ2to';
 const CASILDA_LAT = -33.044167;
 const CASILDA_LNG = -61.168056;
+const CASILDA_LOCATION = `${CASILDA_LAT},${CASILDA_LNG}`;
+const CASILDA_RADIUS = 12000; // 12 km de radio para cubrir toda el área de Casilda y accesos
 const LOCALIDADES_VECINAS = [
   'sanford', 'pujato', 'fuentes', 'arequito', 'carcaraña', 'carcarana',
   'los molinos', 'chabas', 'chabás', 'correa', 'villada', 'arnaldi', 'firmat'
@@ -857,7 +861,15 @@ export default function MapScreen({ route, navigation }) {
               alignItems: 'center',
               gap: 3
             }} 
-            onPress={() => navigation.replace('Login')}
+            onPress={async () => {
+              try {
+                await AsyncStorage.removeItem('pasajero_session');
+              } catch (e) {}
+              if (Platform.OS === 'web') {
+                try { localStorage.removeItem('pasajero_user'); } catch (e) {}
+              }
+              navigation.replace('Login');
+            }}
           >
             <Text style={{ fontSize: 11 }}>🚪</Text>
             <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 11 }}>Salir</Text>
@@ -1005,6 +1017,9 @@ export default function MapScreen({ route, navigation }) {
                       ref={origenRef}
                       placeholder="¿Dónde te buscamos?"
                       fetchDetails={true}
+                      enablePoweredByContainer={false}
+                      debounce={300}
+                      onFail={(err) => console.log('Places Origen error:', err)}
                       textInputProps={{
                         onChangeText: (text) => {
                           setOrigenTexto(text);
@@ -1030,9 +1045,12 @@ export default function MapScreen({ route, navigation }) {
                         }
                       }}
                       query={{
-                        key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                        key: GOOGLE_MAPS_API_KEY,
                         language: 'es',
                         components: 'country:ar',
+                        location: CASILDA_LOCATION,
+                        radius: CASILDA_RADIUS,
+                        strictbounds: true,
                       }}
                       styles={googlePlacesStyles}
                     />
@@ -1042,7 +1060,11 @@ export default function MapScreen({ route, navigation }) {
                     <GooglePlacesAutocomplete
                       placeholder="¿A dónde vas?"
                       fetchDetails={true}
+                      enablePoweredByContainer={false}
+                      debounce={300}
+                      onFail={(err) => console.log('Places Destino error:', err)}
                       textInputProps={{
+                        onChangeText: (text) => setDestinoTexto(text),
                         placeholderTextColor: '#64748b'
                       }}
                       onPress={(data, details = null) => {
@@ -1072,9 +1094,12 @@ export default function MapScreen({ route, navigation }) {
                         }
                       }}
                       query={{
-                        key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                        key: GOOGLE_MAPS_API_KEY,
                         language: 'es',
                         components: 'country:ar',
+                        location: CASILDA_LOCATION,
+                        radius: CASILDA_RADIUS,
+                        strictbounds: true,
                       }}
                       styles={googlePlacesStyles}
                     />
@@ -1615,10 +1640,12 @@ export default function MapScreen({ route, navigation }) {
                       <GooglePlacesAutocomplete
                         placeholder="Origen de simulación"
                         fetchDetails={true}
+                        enablePoweredByContainer={false}
+                        debounce={300}
                         onPress={(data, details = null) => {
                           setCoordsOrigenSim({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
                         }}
-                        query={{ key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar' }}
+                        query={{ key: GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar', location: CASILDA_LOCATION, radius: CASILDA_RADIUS, strictbounds: true }}
                         styles={{...googlePlacesStyles, textInput: {...googlePlacesStyles.textInput, height: 42}}}
                       />
                     </View>
@@ -1628,10 +1655,12 @@ export default function MapScreen({ route, navigation }) {
                       <GooglePlacesAutocomplete
                         placeholder="Destino de simulación"
                         fetchDetails={true}
+                        enablePoweredByContainer={false}
+                        debounce={300}
                         onPress={(data, details = null) => {
                           setCoordsDestinoSim({ lat: details.geometry.location.lat, lng: details.geometry.location.lng });
                         }}
-                        query={{ key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar' }}
+                        query={{ key: GOOGLE_MAPS_API_KEY, language: 'es', components: 'country:ar', location: CASILDA_LOCATION, radius: CASILDA_RADIUS, strictbounds: true }}
                         styles={{...googlePlacesStyles, textInput: {...googlePlacesStyles.textInput, height: 42}}}
                       />
                     </View>
