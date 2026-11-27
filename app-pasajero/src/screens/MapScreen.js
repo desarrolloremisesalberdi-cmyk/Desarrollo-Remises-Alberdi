@@ -1651,25 +1651,29 @@ export default function MapScreen({ route, navigation }) {
             <TouchableOpacity 
               style={{
                 backgroundColor: '#10b981',
-                padding: 16,
+                paddingVertical: 14,
+                paddingHorizontal: 14,
                 borderRadius: 16,
                 marginBottom: 16,
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                gap: 8,
               }}
               onPress={() => confirmarPedidoTaxi(null)}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 22 }}>⚡</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 6 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>⚡</Text>
                 </View>
-                <View>
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Asignar el más rápido</Text>
-                  <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>Despacha al primer móvil libre disponible</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Asignar el más rápido</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11 }} numberOfLines={1}>Despacha al primer móvil libre disponible</Text>
                 </View>
               </View>
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>PEDIR ➔</Text>
+              <View style={{ backgroundColor: 'rgba(0,0,0,0.18)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 }}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>PEDIR ➔</Text>
+              </View>
             </TouchableOpacity>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
