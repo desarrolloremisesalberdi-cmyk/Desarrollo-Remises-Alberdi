@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, useColorScheme } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
@@ -10,28 +10,55 @@ export default function ForgotPasswordScreen({ navigation }) {
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handleSendCode = async () => {
-    if (!email) {
-      alert('Por favor ingresa tu correo electrónico.');
+    if (!email || !email.trim()) {
+      Alert.alert('Campo requerido', 'Por favor ingresa tu correo electrónico.');
       return;
     }
 
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const response = await fetch(`${API_URL}/api/users/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim() }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const data = await response.json();
       if (data.success) {
-        alert('Se ha enviado un código a tu correo.');
-        navigation.navigate('ResetPassword', { email });
+        if (data.token) {
+          Alert.alert(
+            'Código Generado',
+            `Tu código de recuperación es:\n\n${data.token}\n\nIngrésalo a continuación para crear tu nueva contraseña.`,
+            [
+              {
+                text: 'Continuar',
+                onPress: () => navigation.navigate('ResetPassword', { email: email.trim(), token: data.token })
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Código Enviado',
+            'Se ha enviado un código a tu correo electrónico. Por favor revisa tu bandeja de entrada o spam.',
+            [
+              {
+                text: 'Continuar',
+                onPress: () => navigation.navigate('ResetPassword', { email: email.trim() })
+              }
+            ]
+          );
+        }
       } else {
-        alert(data.error || 'Error al solicitar el código.');
+        Alert.alert('Atención', data.error || 'Error al solicitar el código.');
       }
     } catch (error) {
-      alert('Error de conexión con el servidor.');
+      clearTimeout(timeoutId);
+      Alert.alert('Error de conexión', 'No pudimos comunicarnos con el servidor. Por favor verifica tu conexión a internet.');
     } finally {
       setLoading(false);
     }

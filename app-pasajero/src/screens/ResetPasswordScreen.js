@@ -1,39 +1,58 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, useColorScheme } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 
 const API_URL = 'https://desarrollo-remises-alberdi.onrender.com';
 
 export default function ResetPasswordScreen({ route, navigation }) {
   const email = route.params?.email || '';
-  const [token, setToken] = useState('');
+  const initialToken = route.params?.token || '';
+  const [token, setToken] = useState(initialToken);
   const [nuevaClave, setNuevaClave] = useState('');
   const [loading, setLoading] = useState(false);
   const isDarkMode = true; // Siempre oscuro
   const theme = isDarkMode ? darkTheme : lightTheme;
 
   const handleReset = async () => {
-    if (!token || !nuevaClave) {
-      alert('Por favor ingresa el código y tu nueva contraseña.');
+    if (!token || !token.trim()) {
+      Alert.alert('Código requerido', 'Por favor ingresa el código de 6 dígitos.');
+      return;
+    }
+    if (!nuevaClave || nuevaClave.trim().length < 4) {
+      Alert.alert('Contraseña corta', 'Por favor ingresa una nueva contraseña de al menos 4 caracteres.');
       return;
     }
 
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const response = await fetch(`${API_URL}/api/users/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token, nueva_clave: nuevaClave }),
+        body: JSON.stringify({ email: email.trim(), token: token.trim(), nueva_clave: nuevaClave.trim() }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const data = await response.json();
       if (data.success) {
-        alert('Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        Alert.alert(
+          '¡Éxito!',
+          'Contraseña actualizada correctamente. Ya puedes iniciar sesión con tu nueva clave.',
+          [
+            {
+              text: 'Iniciar Sesión',
+              onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })
+            }
+          ]
+        );
       } else {
-        alert(data.error || 'Código incorrecto.');
+        Alert.alert('Código incorrecto', data.error || 'El código es incorrecto o ha vencido.');
       }
     } catch (error) {
-      alert('Error de conexión con el servidor.');
+      clearTimeout(timeoutId);
+      Alert.alert('Error de conexión', 'No pudimos comunicarnos con el servidor. Revisa tu conexión a internet.');
     } finally {
       setLoading(false);
     }

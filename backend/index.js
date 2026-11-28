@@ -97,8 +97,11 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER || 'desarrolloremisesalberdi@gmail.com',
-    pass: process.env.EMAIL_PASS || 'tu_contraseña_de_aplicacion'
-  }
+    pass: process.env.EMAIL_PASS || ''
+  },
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 5000
 });
 
 // Utils
@@ -227,40 +230,70 @@ app.post('/api/users/login', async (req, res) => {
   }
 });
 
-// Recuperar contraseña (Generar Token y enviar correo)
+// Recuperar contraseña (Generar Token y enviar correo o fallback directo)
 app.post('/api/users/forgot-password', async (req, res) => {
   const { email } = req.body;
+  if (!email || !email.trim()) {
+    return res.status(400).json({ success: false, error: 'Por favor ingresa tu correo electrónico.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
   try {
-    const result = await db.query('SELECT id, nombre FROM usuarios WHERE email = $1', [email]);
+    const result = await db.query('SELECT id, nombre FROM usuarios WHERE LOWER(email) = LOWER($1)', [cleanEmail]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'No existe usuario con ese correo.' });
+      return res.status(404).json({ success: false, error: 'No existe usuario registrado con ese correo.' });
     }
 
     const user = result.rows[0];
     // Generar un token aleatorio de 6 dígitos
     const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    await db.query('UPDATE usuarios SET reset_token = $1 WHERE email = $2', [resetToken, email]);
+    await db.query('UPDATE usuarios SET reset_token = $1 WHERE LOWER(email) = LOWER($2)', [resetToken, cleanEmail]);
 
-    const mailOptions = {
-      from: transporter.options.auth.user,
-      to: email,
-      subject: 'Recuperación de Contraseña - Taxis Alberdi',
-      text: `Hola ${user.nombre}, tu código para restablecer la contraseña es: ${resetToken}. Ingrésalo en la aplicación para cambiar tu clave.`
-    };
+    // Intentar enviar correo solo si EMAIL_PASS está configurado
+    let emailEnviado = false;
+    if (process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'tu_contraseña_de_aplicacion') {
+      try {
+        const mailOptions = {
+          from: transporter.options.auth.user,
+          to: cleanEmail,
+          subject: 'Recuperación de Contraseña - Taxis Alberdi',
+          text: `Hola ${user.nombre}, tu código para restablecer la contraseña es: ${resetToken}. Ingrésalo en la aplicación para cambiar tu clave.`
+        };
 
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true, message: 'Correo enviado.' });
+        const sendPromise = transporter.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout SMTP')), 4000));
+        await Promise.race([sendPromise, timeoutPromise]);
+        emailEnviado = true;
+      } catch (mailErr) {
+        console.warn('Aviso: Fallo el envío de correo SMTP, se usará entrega de código:', mailErr.message);
+      }
+    } else {
+      console.log(`[RECUPERACIÓN] Código para ${cleanEmail}: ${resetToken}`);
+    }
+
+    res.json({
+      success: true,
+      message: emailEnviado ? 'Se ha enviado un código a tu correo.' : 'Hemos generado tu código de recuperación.',
+      emailEnviado,
+      token: emailEnviado ? undefined : resetToken
+    });
   } catch (error) {
-    console.error('Error enviando correo:', error);
-    res.status(500).json({ success: false, error: 'Error al enviar el correo.' });
+    console.error('Error en forgot-password:', error);
+    res.status(500).json({ success: false, error: 'Error interno al procesar la solicitud.' });
   }
 });
 
 // Restablecer contraseña con Token
 app.post('/api/users/reset-password', async (req, res) => {
   const { email, token, nueva_clave } = req.body;
+  if (!email || !token || !nueva_clave) {
+    return res.status(400).json({ success: false, error: 'Todos los campos son requeridos.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanToken = token.trim();
   try {
-    const result = await db.query('SELECT id FROM usuarios WHERE email = $1 AND reset_token = $2', [email, token]);
+    const result = await db.query('SELECT id FROM usuarios WHERE LOWER(email) = LOWER($1) AND reset_token = $2', [cleanEmail, cleanToken]);
     if (result.rows.length === 0) {
       return res.status(400).json({ success: false, error: 'Código incorrecto o vencido.' });
     }
@@ -268,7 +301,7 @@ app.post('/api/users/reset-password', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(nueva_clave, saltRounds);
     
-    await db.query('UPDATE usuarios SET clave = $1, reset_token = NULL WHERE email = $2', [hashedPassword, email]);
+    await db.query('UPDATE usuarios SET clave = $1, reset_token = NULL WHERE LOWER(email) = LOWER($2)', [hashedPassword, cleanEmail]);
     res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
   } catch (error) {
     console.error('Error restableciendo clave:', error);
